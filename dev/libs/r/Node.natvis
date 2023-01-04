@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+  <Type Name="r2::Node">
+    <DisplayString>{name}</DisplayString>
+    <Expand>
+      <Item Name="name">name</Item>
+      <Item Name="x">x</Item>
+      <Item Name="y">y</Item>
+      <Item Name="z">z</Item>
+      <Item Name="scaleX">scaleX</Item>
+      <Item Name="scaleY">scaleY</Item>
+      <Item Name="rot">rotation</Item>
+      <Item Name="alpha">alpha</Item>
+      <Item Name="visible">visible</Item>
+      <Item Name="parent">parent</Item>
+    </Expand>
+  </Type>
+
+</AutoVisualizer>

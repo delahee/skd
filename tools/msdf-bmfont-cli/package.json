@@ -1,0 +1,81 @@
+{
+  "name": "msdf-bmfont-xml",
+  "version": "2.5.4",
+  "description": "Creates a BMFont compatible bitmap font of Signed-Distance Fields from a font file",
+  "main": "index.js",
+  "scripts": {
+    "debug": "cd test/assets/fonts && node --inspect-brk=9229 ../../../cli.js -f json -o font -u -m 512,256 -t msdf -s 42 -r 5 -p 2 --smart-size --pot ../../../assets/fonts/DIN_CB.ttf",
+    "test": "npm run test:disk && npm run test:memory",
+    "test:disk": "cd test/assets/fonts && node ../../../cli.js -f xml -o DIN_CB -v -u -m 512,256 -t msdf -s 42 -r 4 -p 2 --smart-size --pot ../../../assets/fonts/DIN_CB.ttf",
+    "test:memory": "node test/test_memory.js",
+    "test:rtl": "cd test/assets/fonts && node ../../../cli.js -f xml -o Iransans -i ../../../assets/charset/charset.persian.txt -v -u -m 512,256 -t msdf -s 42 -r 4 -p 2 --smart-size --pot ../../../assets/fonts/Iransans.ttf",
+    "test:save": "cd test/assets/fonts && node ../../../cli.js -o DIN_CB -u -m 512,256 --smart-size --pot ../../../assets/fonts/DIN_CB.ttf",
+    "test:reuse": "cd test/assets/fonts && node --inspect-brk=9229 ../../../cli.js -u DIN_CB.cfg ../../../assets/fonts/FiraSansMedium.woff",
+    "render": "npm run test:disk && node test/test.js",
+    "version": "standard-version"
+  },
+  "bin": {
+    "msdf-bmfont": "./cli.js"
+  },
+  "author": {
+    "name": "YM Shen",
+    "email": "soimy@163.com",
+    "url": "https://github.com/soimy"
+  },
+  "keywords": [
+    "bmfont",
+    "bitmap",
+    "font",
+    "text",
+    "fonts",
+    "signed",
+    "distance",
+    "field",
+    "glyph",
+    "glyphs",
+    "sdf",
+    "msdf",
+    "multichannel"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/soimy/msdf-bmfont-xml.git"
+  },
+  "homepage": "https://github.com/soimy/msdf-bmfont-xml",
+  "bugs": {
+    "url": "https://github.com/soimy/msdf-bmfont-xml/issues"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "arabic-persian-reshaper": "^1.0.1",
+    "cli-progress": "^2.1.1",
+    "commander": "^2.19.0",
+    "handlebars": "^4.7.2",
+    "is-invalid-path": "^1.0.2",
+    "jimp": "^0.6.0",
+    "js2xmlparser": "^4.0.0",
+    "map-limit": "0.0.1",
+    "maxrects-packer": "^2.4.0-alpha.0",
+    "opentype.js": "^0.7.3",
+    "update-notifier": "^4.0.0"
+  },
+  "devDependencies": {
+    "cz-conventional-changelog": "^2.1.0",
+    "load-bmfont": "^1.4.0",
+    "open": "^6.3.0",
+    "rimraf": "^2.6.3",
+    "run-parallel": "^1.1.9",
+    "serve-handler": "^6.0.2",
+    "standard-version": "^6.0.1",
+    "three": "^0.102.1",
+    "three-bmfont-text": "^2.3.0",
+    "tslint": "^5.14.0",
+    "typescript": "^3.3.3333",
+    "xml2js": "^0.4.19"
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  }
+}

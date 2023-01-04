@@ -1,0 +1,101 @@
+{
+    "name": "DtScene#770",
+    "uid": 770,
+    "type": 5,
+    "visible": true,
+    "nodeFlags": 0,
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0,
+    "rot": 0.0,
+    "scaleX": 1.0,
+    "scaleY": 1.0,
+    "hasFilter ": false,
+    "vars": {
+        "hasData": false
+    },
+    "nbChildren": 1,
+    "children_types": [
+        1
+    ],
+    "children": [
+        {
+            "name": "Rich Text#775",
+            "uid": 775,
+            "type": 1,
+            "visible": true,
+            "nodeFlags": 0,
+            "x": 300.0,
+            "y": 300.0,
+            "z": 0.0,
+            "rot": 0.0,
+            "scaleX": 3.0,
+            "scaleY": 3.0,
+            "hasFilter ": false,
+            "vars": {
+                "hasData": false
+            },
+            "parentUID": 770,
+            "nbChildren": 0,
+            "useSimpleZ": true,
+            "killAlpha": false,
+            "depthRead": false,
+            "depthWrite": false,
+            "blendmode": 2,
+            "zTop": 0.0,
+            "zBottom": 0.0,
+            "color": {
+                "r": 1.0,
+                "g": 1.0,
+                "b": 1.0,
+                "a": 1.0
+            },
+            "texFiltering": 3,
+            "shader": 0,
+            "shaderFlags": 0,
+            "bgColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "blockAlign": 0,
+            "hasFont": true,
+            "fontName": "",
+            "text": "This is a funny text",
+            "hasDropShadow": false,
+            "hasOutline": false,
+            "colors": [
+                {
+                    "start": 0,
+                    "end": -1,
+                    "col": {
+                        "r": 1.0,
+                        "g": 1.0,
+                        "b": 1.0,
+                        "a": 1.0
+                    },
+                    "multiply": true
+                }
+            ]
+        }
+    ],
+    "fixedSize": false,
+    "doClear": true,
+    "clearColor": {
+        "r": 0.0,
+        "g": 0.0,
+        "b": 0.0,
+        "a": 1.0
+    },
+    "cameraScale": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": -0.000030517578125
+    },
+    "areDimensionsOverriden": true,
+    "sceneWidth": 1600.0,
+    "sceneHeight": 900.0,
+    "skipBasic": false,
+    "skipClip": false
+}

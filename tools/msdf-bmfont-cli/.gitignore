@@ -1,0 +1,11 @@
+.DS_Store
+node_modules/
+npm-debug.log
+test/assets/fonts/*.json
+test/assets/fonts/*.fnt
+test/assets/fonts/*.png
+test/assets/fonts/*.txt
+test/assets/fonts/*.svg
+test/assets/fonts/*.cfg
+.vscode/
+.eslintrc*

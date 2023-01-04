@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+  <Type Name="r2::Batch">
+    <DisplayString>Name: {name}</DisplayString>
+    <Expand>
+      <Item Name="nbElems">nbElems</Item>
+      <Item Name="parent">parent</Item>
+      <ArrayItems >
+        <Size Condition="nbElems&lt;=4">nbElems</Size>
+        <Size Condition="nbElems&gt;4">4</Size>
+        <ValuePointer>head</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="r2::BatchElem">
+    <DisplayString>UID: {uid}</DisplayString>
+    <Expand>
+      <Item Name="name">name</Item>
+      <Item Name="x">x</Item>
+      <Item Name="y">y</Item>
+      <Item Name="z">z</Item>
+      <Item Name="scaleX">scaleX</Item>
+      <Item Name="scaleY">scaleY</Item>
+      <Item Name="rot">rotation</Item>
+      <Item Name="color">color</Item>
+      <Item Name="alpha">alpha</Item>
+      <Item Name="batch">batch</Item>
+    </Expand>
+  </Type>
+  
+</AutoVisualizer>

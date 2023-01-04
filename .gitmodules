@@ -1,0 +1,11 @@
+[submodule "dt_fmod_session"]
+	path = dt_fmod_session
+	url = https://github.com/delahee/dt_fmod_session.git
+[submodule "tools/msdf-bmfont-xml"]
+	path = tools/msdf-bmfont-cli
+	url = https://github.com/togimaro/msdf-bmfont-cli
+[submodule "dt_art"]
+	path = dt_art
+	url = https://github.com/delahee/dt_art.git
+	branch = main
+	update = merge

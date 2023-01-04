@@ -1,0 +1,916 @@
+/*******************************************************************************
+	Options:
+
+	-	PASTA_PSSL				Select platform.
+		PASTA_GLSL
+
+	-	PASTA_VERTEX_SHADER		Select shader stage type.
+		PASTA_FRAGMENT_SHADER
+		PASTA_COMPUTE_SHADER
+
+	-	PASTA_DEBUG				Enable debugging options (disable optimisation,
+								etc.)
+
+
+	Notes:
+
+	-	Directives:
+		Compiler attributes/directives are prefixed by an underscore and are 
+		all-caps, e.g. _BRANCH, _FORCE_EARLY_DEPTH_STENCIL.
+			
+			_BRANCH
+			_FLATTEN
+			_UNROLL(x)
+			_LOOP
+			_FORCE_EARLY_DEPTH_STENCIL
+
+		(GLSL) _BRANCH, _FLATTEN, _UNROLL(x) and _LOOP are not supported and 
+		expand to nothing.
+		(PSSL) _FORCE_EARLY_DEPTH_STENCIL should appear directly before the 
+		main() function
+
+	-	Semantics/registers:
+		Variable semantic/register qualifiers must be declared via the macros
+		_SEMANTIC() and _REGISTER(), e.g.:
+
+			linear out float4 vPosition _SEMANTIC(S_POSITION);
+			uniform Texture2D txNormalMap _REGISTER(t0);
+
+		These aren't usually required (prefer to use _IN, _OUT, _ATTRIBUTE or 
+		_VARYING macros instead).
+
+	-	Inputs/outputs:
+		Shader inputs/outputs may be declared using the special _IN and _OUT 
+		macros (however prefer to use _ATTRIBUTE and _VARYING). These macros are 
+		defined differently depending on the shader stage, hence their usage is
+		different:
+
+			Vertex shader usage:
+				_IN (type, name)
+				_OUT(interpolation, type, name)
+
+			Fragment shader usage:
+				_IN (interpolation, type, name)
+				_OUT(type, name, index)
+				_OUT_DEPTH(qualifier)
+
+		'interpolation' is the interpolation qualifier (linear, noperspective,
+		nointerpolation), 'type' is the variable type (float, float4, etc.) and 
+		'name' is the variable name (which is also used as the variable semantic
+		and must match across declarations in different shader stages).
+
+		Depth outputs from fragment shaders are declared with the special 
+		_OUT_DEPTH macro. This declares the special S_Depth output (writing to
+		S_Depth sets the fragment's depth) with the given qualifier, which must
+		be one of:
+				
+			DEPTH_ANY       The shader may write any depth.
+			DEPTH_GREATER   The shader guarantees to write a depth greater than
+			                or equal to the fragment's interpolated depth.
+			DEPTH_LESS      The shader guarantees to write a depth less than or
+			                equal to) the fragment's interpolated depth.
+
+		(GLSL) Depth output qualifiers are ignored if ARB_conservative_depth is
+		not available.
+
+		Note that, due to the interface matching requirements of PSSL, the 
+		input/output interface of linked shader stages MUST match exactly; an
+		output from one shader stage must have a corresponding input in the same
+		location in the next shader stage.
+
+		_ATTRIBUTE and _VARYING convenience macros are defined which wrap _IN
+		and _OUT. _ATTRIBUTE expands to nothing in fragment shaders, _VARYING() 
+		expands to _OUT in vertex shaders, _IN in fragment shaders. 
+
+		Use of interface blocks should be avoided, instead prefer to declare 
+		inputs/outputs in a common header to both shaders and use _VARYING.
+
+	-	Interface blocks:
+		These may be declared as the type InterfaceBlock, e.g.:
+
+			out InterfaceBlock DefaultVertex {
+				// ...
+			};
+
+		This is to get around the fact that GLSL does not permit in/out blocks
+		to be declared as structs, whereas this is required in other languages.
+
+		Interface blocks may also be defined in a common header, e.g.:
+
+			#define DefaultVertex InterfaceBlock _DefaultVertex {	\
+				linear float4 positionV;							\
+			}
+
+		and use the _OUT_BLOCK() and _IN_BLOCK() macros as with other variables:
+
+			_OUT_BLOCK(DefaultVertex, vertexOut);
+			_IN_BLOCK (nointerpolation, DefaultVertex, vertexIn);
+
+		Note that the actual block name must be different to the macro name to
+		prevent the macro being expanded twice.
+
+		Use of interface blocks should be avoided, instead prefer to declare 
+		inputs/outputs in a common header to both shaders by using _VARYING.
+
+	-	Import/export macros:
+		Some shader varyings may benefit from packing on some platforms (if the
+		compiler doesn't support automatic parameter packing). To help make 
+		shader code clearer, _EXPORT(name, value) and _IMPORT(name) are defined, 
+		these expand to:
+
+			_EXPORT_name(value)
+			_IMPORT_name
+
+		Which should be defined by the vertex/fragment shaders as appropriate.
+
+	-	System variables (builtins):
+		These are special shader inputs/outputs with names prefixed by 'S_'. 
+		These must be declared in order to be used in a shader, hence they 
+		become part of the shader's interface and must follow the interface 
+		matching rules stated previously. For example S_Position:
+
+			Vertex shader:
+				_OUT(linear, float4, S_Position);
+				_OUT(linear, float2, vUv);
+
+			Fragment shader (note declarations are in the SAME ORDER):
+				_IN(linear, float4, S_Position);
+				_IN(linear, float2, vUv)
+
+
+		(PSSL) This requires that variable names are allowed to be the same as
+		semantic names.
+		(PSSL) Interpolation qualifiers are ignored for vertex shader outputs.
+	
+	-	Constant buffers:
+		Declare constant and buffers with the CBuffer type, as follows:
+
+			CBuffer _cbInstance { // '_cbInstance' is the app-visible name
+				struct {
+					float4x4 worldMatrix;
+				} cbInstance[kMaxInstanceCount];
+			};
+
+		(GLSL) GLSL permits named instances of ConstantBuffers, i.e. the 
+		following is allowed:
+
+			CBuffer _cbInstance {
+				float4x4 worldMatrix;
+			} cbInstance;
+
+		This is NOT permitted in PSSL, hence use the named struct approach in 
+		the previous example (or allow CBuffer members to be part of the
+		global namespace).
+
+	-	RW buffers:
+		Read/write buffers are declared and used differently to constant 
+		buffers:
+
+			_RWBUFFER(float, _bfFloat); // '_bfFloat' is the app-visible name
+
+		Buffer access permission is determined by the name: _RBUFFER for 
+		readonly, _WBUFFER for writeonly and _RWBUFFER for read-write.
+				
+		Access to the buffer elements is performed via a macro:
+
+			_BUFFER_DATA(_bfFloat, i)
+
+		This is due to the differences between buffer declaration syntax in
+		GLSL and PSSL.
+
+	-	Texture sampling:
+		All texture sampling is wrapped in function-style macros: sample*() 
+		functions perform normal, filtered texture sampling; fetch*() functions
+		perform unfiltered texel fetches (with non-normalized integer coorinates 
+		as input); gather*() functions perform filtered sampling of a single 
+		component from a 2x2 block of texels.
+
+		The implementation-computed sampling LOD can be queried via queryLod().
+
+	-	Array initialization: \todo this might not be relevant (requires test)
+		GLSL does not permit C-style array initialization, e.g.:
+		
+			static const float2 kArray[2] = { 
+				float2(1.0), float2(2.0) 
+			};
+
+		is illegal. Instead, GLSL required "constructor syntax" be used:
+
+			static const float2 kArray[2] = float2[]( 
+				float2(1.0), float2(2.0) 
+			);
+
+		To maintain interoperability between GLSL and PSSL, array initialization
+		must be performed as follows:
+			
+			static const float2 kArray[2] = 
+			_ARRAY_INIT_BEGIN(float2)
+				float2(1.0), float2(2.0)
+			_ARRAY_INIT_END();
+
+		(PSSL) The 'static' keyword is required for global  constants, as 
+		globals are 'uniform' by default.
+		(GLSL) The 'static' keyword is reserved but unused; it expands to 
+		nothing.
+
+	-	The platform's texture coordinate origin is described by one of the 
+		following:
+
+			PASTA_TCO_TOP_LEFT     top-left origin (PSSL, HLSL)
+			PASTA_TCO_BOTTOM_LEFT  bottom-left origin (GLSL)
+
+		The texture coordinate origin is important for example when generating
+		a view ray from the screen texture coordinates S_Position.
+		
+	-	Matrix access via operator[] is different between GLSL and PSSL/HLSL;
+		in GLSL, operator[] returns a column from the matrix. In PSSL/HLSL,
+		operator[] returns a row:
+
+			float4x4 mt;
+			float4 v = mt[2].xyzw // v is a column in GLSL, a row in PSSL/HLSL
+
+		As a workaround, avoid using operator[] and instead use the getRow()
+		and getCol() helper functions (and their matching setRow()/setCol()
+		helper functions).
+
+		Similarly, matrix construction should be performed via setRows()/
+		setCols(), e.g. to create a TBN matrix you would call:
+
+			float3x3 tbn;
+			setCols(tbn, t, b, n);
+
+		There are also getVal() and setVal() functions which provide access to
+		matrix elements with indices specifie in row,column order.
+
+		This conflict extends to the naming of non-square matrices, hence the
+		PSSL/HLSL float3x4 maps to mat4x3.
+
+	-	PSSL/HLSL fmod() behaves differently to GLSL mod(), hence mod() is 
+		implemented to match the GLSL behaviour as 
+
+			x - y * floor(x / y);
+
+*******************************************************************************/
+#ifndef COMMON_PLATFORM_SHD
+#define COMMON_PLATFORM_SHD
+
+// Validate shader stage type was set
+#if	!defined(PASTA_VERTEX_SHADER) && !defined(PASTA_FRAGMENT_SHADER) && !defined(PASTA_COMPUTE_SHADER)
+	#error (platform.shl) Shader stage type undefined
+#endif
+
+// Auto-detect platform/shader type
+#if defined(__PSSL__) && !defined(PASTA_PSSL)
+	#define PASTA_PSSL
+
+	#if !defined(PASTA_VERTEX_SHADER) && !defined(PASTA_FRAGMENT_SHADER) && !defined(PASTA_COMPUTE_SHADER)
+		#if		defined(__PSSL_VS__) || defined(__PSSL_VS_VS__) || defined(__PSSL_VS_VL__) || defined(__PSSL_VS_VE__)
+		 // vertex shader
+			#define PASTA_VERTEX_SHADER
+		#elif	defined(__PSSL_PS__)
+		 // fragment shader
+			#define PASTA_FRAGMENT_SHADER
+		#elif	defined(__PSSL_CS__)
+		 // compute shader
+			#define PASTA_COMPUTE_SHADER
+		#endif
+
+	#endif
+#endif
+
+// Default local size for compute shaders
+#ifdef PASTA_COMPUTE_SHADER
+	#ifndef PASTA_LOCAL_SIZE_X
+		#define PASTA_LOCAL_SIZE_X 1
+	#endif
+	#ifndef PASTA_LOCAL_SIZE_Y
+		#define PASTA_LOCAL_SIZE_Y 1
+	#endif
+	#ifndef PASTA_LOCAL_SIZE_Z
+		#define PASTA_LOCAL_SIZE_Z 1
+	#endif
+
+	#if   defined(PASTA_PSSL)
+		#define _DECLARE_COMPUTE_LOCAL_SIZE [NUM_THREADS(PASTA_LOCAL_SIZE_X, PASTA_LOCAL_SIZE_Y, PASTA_LOCAL_SIZE_Z)]
+	#elif defined(PASTA_GLSL)
+		#define _DECLARE_COMPUTE_LOCAL_SIZE layout(local_size_x = PASTA_LOCAL_SIZE_X, local_size_y = PASTA_LOCAL_SIZE_Y, local_size_z = PASTA_LOCAL_SIZE_Z) in;
+	#endif
+#endif
+
+/*******************************************************************************
+
+                                      PSSL
+
+*******************************************************************************/
+#if defined(PASTA_PSSL)
+	#define PASTA_PSSL_ONLY(x) x
+	#define PASTA_GLSL_ONLY(x)
+
+	#define _ARRAY_INIT_BEGIN(type) {
+	#define _ARRAY_INIT_END()       }
+
+	#define PASTA_TCO_TOP_LEFT
+
+	// adhoc mechanism for setting output format. This sets the output for all targets
+	#if   defined(OUTPUT_FORMAT_32_R)
+		#pragma PSSL_target_output_format (default FMT_32_R)
+	#elif defined(OUTPUT_FORMAT_32_GR)
+		#pragma PSSL_target_output_format (default FMT_32_GR)
+	#elif defined(OUTPUT_FORMAT_32_AR)
+		#pragma PSSL_target_output_format (default FMT_32_AR)
+	#elif defined(OUTPUT_FORMAT_32_ABGR) // half throughput
+		#pragma PSSL_target_output_format (default FMT_32_ABGR)
+	#elif defined(OUTPUT_FORMAT_UNORM16_ABGR)
+		#pragma PSSL_target_output_format (default FMT_UNORM16_ABGR)
+	#elif defined(OUTPUT_FORMAT_SNORM16_ABGR)
+		#pragma PSSL_target_output_format (default FMT_SNORM16_ABGR)
+	#elif defined(OUTPUT_FORMAT_UINT16_ABGR)
+		#pragma PSSL_target_output_format (default FMT_UINT16_ABGR)
+	#elif defined(OUTPUT_FORMAT_SINT16_ABGR)
+		#pragma PSSL_target_output_format (default FMT_SINT16_ABGR)
+	#endif
+
+	struct DrawArraysIndirectCmd
+	{
+		uint m_count;
+		uint m_primCount;
+		uint m_first;
+		uint m_baseInstance;
+	};
+	
+	struct DrawElementsIndirectCmd
+	{
+		uint m_count;
+		uint m_primCount;
+		uint m_firstIndex;
+		uint m_baseVertex;
+		uint m_baseInstance;
+	};
+	
+	struct DispatchIndirectCmd
+	{
+		uint m_groupsX;
+		uint m_groupsY;
+		uint m_groupsZ;
+	};
+
+	// Directives
+	#define _BRANCH                    [branch]
+	#define _FLATTEN                   [flatten]
+	#define _UNROLL(x)                 [unroll(x)]
+	#define _LOOP                      [loop]
+	#define _FORCE_EARLY_DEPTH_STENCIL [FORCE_EARLY_DEPTH_STENCIL]
+	
+	#define _SEMANTIC(x)               : x
+	#define _REGISTER(x)               : register(x)
+
+	// Type qualifiers
+	#define nointerpolation            nointerp
+	#define noperspective              nopersp
+
+	// Data types
+	#define InterfaceBlock             struct
+	
+	#define Texture1D_int              Texture1D<int4>
+	#define Texture1D_uint             Texture1D<uint4>
+	#define Texture2D_int              Texture2D<int4>
+	#define Texture2D_uint             Texture2D<uint4>
+	#define Texture3D_int              Texture3D<int4>
+	#define Texture3D_uint             Texture3D<uint4>
+	#define Texture1DArray             Texture1D_Array
+	#define Texture1DArray_int         Texture1D_Array<int4>
+	#define Texture1DArray_uint        Texture1D_Array<uint4>
+	#define Texture2DArray             Texture2D_Array
+	#define Texture2DArray_int         Texture2D_Array<int4>
+	#define Texture2DArray_uint        Texture2D_Array<uint4>
+
+	#define CBuffer                    ConstantBuffer
+	#define _RWBUFFER(t,name)          RW_RegularBuffer<t> name
+	#define _RBUFFER(t,name)           RW_RegularBuffer<t> name
+	#define _WBUFFER(t,name)           RW_RegularBuffer<t> name
+	#define _BUFFER_DATA(name, i)   name[i]
+	#define _BUFFER_SIZE(name,retStride,retCount) name.GetDimensions(retCount,retStride)
+
+	// Matrix access
+	float2 getRow(in float2x2 m, in uint r)                                 { return m[r]; } 
+	float3 getRow(in float3x3 m, in uint r)                                 { return m[r]; }
+	float4 getRow(in float4x4 m, in uint r)                                 { return m[r]; }
+	float4 getRow(in float3x4 m, in uint r)                                 { return m[r]; }
+	float2 getCol(in float2x2 m, in uint c)                                 { return float2(m[0][c], m[1][c]); } 
+	float3 getCol(in float3x3 m, in uint c)                                 { return float3(m[0][c], m[1][c], m[2][c]); } 
+	float4 getCol(in float4x4 m, in uint c)                                 { return float4(m[0][c], m[1][c], m[2][c], m[3][c]); }
+	float3 getCol(in float3x4 m, in uint c)                                 { return float3(m[0][c], m[1][c], m[2][c]); }
+	void   setRow(inout float2x2 m, in uint r, in float2 v)                 { m[r] = v; } 
+	void   setRow(inout float3x3 m, in uint r, in float3 v)                 { m[r] = v; }
+	void   setRow(inout float4x4 m, in uint r, in float4 v)                 { m[r] = v; }
+	void   setRow(inout float3x4 m, in uint r, in float4 v)                 { m[r] = v; }
+	void   setCol(inout float2x2 m, in uint c, in float2 v)                 { m[0][c] = v.x; m[1][c] = v.y; } 
+	void   setCol(inout float3x3 m, in uint c, in float3 v)                 { m[0][c] = v.x; m[1][c] = v.y; m[2][c] = v.z; } 
+	void   setCol(inout float4x4 m, in uint c, in float4 v)                 { m[0][c] = v.x; m[1][c] = v.y; m[2][c] = v.z; m[3][c] = v.w; }
+	void   setCol(inout float3x4 m, in uint c, in float3 v)                 { m[0][c] = v.x; m[1][c] = v.y; m[2][c] = v.z; } 
+	void   setRows(inout float2x2 m, in float2 a, in float2 b)              { m = float2x2(a, b); }
+	void   setRows(inout float3x3 m, in float3 a, in float3 b, in float3 c) { m = float3x3(a, b, c); }
+	void   setCols(inout float2x2 m, in float2 a, in float2 b)              { m = float2x2(a.x, b.x, a.y, b.y); }
+	void   setCols(inout float3x3 m, in float3 a, in float3 b, in float3 c) { m = float3x3(a.x, b.x, c.x, a.y, b.y, c.y, a.z, b.z, c.z); }
+	float  getVal(in float2x2 m, in uint r, in uint c)                      { return m[r][c]; }
+	float  getVal(in float3x3 m, in uint r, in uint c)                      { return m[r][c]; }
+	float  getVal(in float4x4 m, in uint r, in uint c)                      { return m[r][c]; }
+	float  getVal(in float3x4 m, in uint r, in uint c)                      { return m[r][c]; }
+	void   setVal(inout float2x2 m, in uint r, in uint c, in float v)       { m[r][c] = v; }
+	void   setVal(inout float3x3 m, in uint r, in uint c, in float v)       { m[r][c] = v; }
+	void   setVal(inout float4x4 m, in uint r, in uint c, in float v)       { m[r][c] = v; }
+	void   setVal(inout float3x4 m, in uint r, in uint c, in float v)       { m[r][c] = v; }
+
+	// Packing
+	#define pack_float2_uint(v)                   PackFloat2ToUInt(v.x, v.y)
+	#define unpack_uint_float2(v)                 float2(f16tof32((half)v), f16tof32((half)(v >> 16)))
+
+	// Atomics/barriers
+	#define AtomicAddReturn(_dst, _v, ret_)      AtomicAdd(_dst, _v, ret_);
+	#define AtomicExchangeReturn(_dst, _v, ret_) AtomicExchange(_dst, _v, ret_);
+	#define AtomicMaxReturn(_dst, _v, ret_)      AtomicMax(_dst, _v, ret_);
+
+	#define memoryBarrier        MemoryBarrier
+	#define memoryBarrierBuffer  ThreadGroupMemoryBarrier
+	#define memoryBarrierImage   ThreadGroupMemoryBarrier
+	#define memoryBarrierShared  SharedMemoryBarrier
+	#define memoryBarrierGroup   ThreadGroupMemoryBarrier
+	
+	// Arithmetic/logic functions (alphabetical order)
+	#define bitfieldInsert(dst,src,offset,width)  BitFieldInsert(BitFieldMask(width,offset), src << offset, dst)
+	#define bitfieldExtract(src,offset,width)     BitFieldExtract(src,offset,width)
+	#define cndMask(cnd,x,y)                      CndMask(cnd,x,y)
+	#define ddx_coarse(x)                         ddx(x)
+	#define ddy_coarse(x)                         ddy(x)
+
+	uint   mod(in uint x,   in uint y)    { return x % y; }
+	float  mod(in float x,  in float y)   { return x - y * floor(x / y); }
+	float2 mod(in float2 x, in float2 y)  { return x - y * floor(x / y); }
+	float3 mod(in float3 x, in float3 y)  { return x - y * floor(x / y); }
+	float4 mod(in float4 x, in float4 y)  { return x - y * floor(x / y); }
+	#define invariant_mod(x, y) (__invariant(mod(x, y)))
+
+	float3 transformPosition(in float4x4 m,  in float3 v)  { return mul(float3x4(m), float4(v.xyz, 1.0)); }
+	float3 transformPosition(in float3x4 m,  in float3 v)  { return mul(m, float4(v.xyz, 1.0)); }
+	float3 transformDirection(in float4x4 m, in float3 v)  { return mul(float3x3(m), v); }
+	float3 transformDirection(in float3x3 m, in float3 v)  { return mul(m, v); }
+	float3 transformDirection(in float3x4 m,  in float3 v) { return mul(float3x3(m), v); }
+
+	// Resource functions (alphabetical order)
+	float4 fetch(in Texture2D tx, in int2 uv)                          { return tx.Load(int3(uv,  0)); }
+	int4   fetch(in Texture2D_int tx, in int2 uv)                      { return tx.Load(int3(uv,  0)); }
+	uint4  fetch(in Texture2D_uint tx, in int2 uv)                     { return tx.Load(int3(uv,  0)); }
+	float4 fetch(in Texture2DArray tx, in int3 uvw)                    { return tx.Load(int4(uvw, 0)); }
+	int4   fetch(in Texture2DArray_int tx, in int3 uvw)                { return tx.Load(int4(uvw, 0)); }
+	uint4  fetch(in Texture2DArray_uint tx, in int3 uvw)               { return tx.Load(int4(uvw, 0)); }
+	float4 fetchLod(in Texture2D tx, in int2 uv, in int ld)            { return tx.Load(int3(uv,  ld)); }
+	int4   fetchLod(in Texture2D_int tx, in int2 uv, in int ld)        { return tx.Load(int3(uv,  ld)); }
+	uint4  fetchLod(in Texture2D_uint tx, in int2 uv, in int ld)       { return tx.Load(int3(uv,  ld)); }
+	float4 fetchLod(in Texture2DArray tx, in int3 uvw, in int ld)      { return tx.Load(int4(uvw, ld)); }
+	int4   fetchLod(in Texture2DArray_int tx, in int3 uvw, in int ld)  { return tx.Load(int4(uvw, ld)); }
+	uint4  fetchLod(in Texture2DArray_uint tx, in int3 uvw, in int ld) { return tx.Load(int4(uvw, ld)); }
+	
+	#define fetchOffset(tx,uv,of)               tx.Load(int3(uv.xy, 0), of)
+	#define fetchLodOffset(tx,uv,of,ld)         tx.Load(int3(uv.xy, ld), of)
+
+	#define gatherA(tx,ss,uv)                   tx.GatherAlpha(ss, uv)
+	#define gatherB(tx,ss,uv)                   tx.GatherBlue(ss, uv)
+	#define gatherG(tx,ss,uv)                   tx.GatherGreen(ss, uv)
+	#define gatherR(tx,ss,uv)                   tx.GatherRed(ss, uv)
+	#define gatherLodA(tx,ss,uv,ld)             tx.GatherLODAlpha(ss, uv, ld)
+	#define gatherLodB(tx,ss,uv,ld)             tx.GatherLODBlue(ss, uv, ld)
+	#define gatherLodG(tx,ss,uv,ld)             tx.GatherLODGreen(ss, uv, ld)
+	#define gatherLodR(tx,ss,uv,ld)             tx.GatherLODRed(ss, uv, ld)
+
+	#define queryLod(tx,ss,uv)                  tx.GetLOD(ss,uv)
+
+	#define sample(tx,ss,uv)                    tx.Sample(ss, uv)
+	#define sampleGrad(tx,ss,uv,dx,dy)          tx.SampleGradient(ss, uv, dx, dy)
+	#define sampleLod(tx,ss,uv,ld)              tx.SampleLOD(ss, uv, ld)
+	
+	#define sampleOffset(tx,ss,uv,of)           tx.Sample(ss, uv, of)
+	#define sampleGradOffset(tx,ss,uv,dx,dy,of) tx.SampleGradient(ss, uv, dx, dy, of)
+	#define sampleLodOffset(tx,ss,uv,ld,of)     tx.SampleLOD(ss, uv, ld, of)
+
+	uint2 textureSize(in Texture2D tx, in uint lod) {
+		uint2 result;
+		uint mipCount; // mipCount result ignored
+		tx.GetDimensions(uint(lod), result.x, result.y, mipCount);
+		return result;
+	}
+	uint2 textureSize(in Texture2D_uint tx, in uint lod) {
+		uint2 result;
+		uint mipCount; // mipCount result ignored
+		tx.GetDimensions(uint(lod), result.x, result.y, mipCount);
+		return result;
+	}
+	uint2 textureSize(in Texture2D_int tx, in uint lod) {
+		uint2 result;
+		uint mipCount; // mipCount result ignored
+		tx.GetDimensions(uint(lod), result.x, result.y, mipCount);
+		return result;
+	}
+	uint3 textureSize(in Texture2DArray tx, in uint lod) {
+		uint2 result;
+		uint mipCount; // mipCount result ignored
+		uint layerCount; // levelCount result ignore
+		tx.GetDimensions(uint(lod), result.x, result.y, layerCount, mipCount);
+		return uint3(result, layerCount);
+	}
+	uint3 textureSize(in Texture2DArray_uint tx, in uint lod) {
+		uint2 result;
+		uint mipCount; // mipCount result ignored
+		uint layerCount; // levelCount result ignore
+		tx.GetDimensions(uint(lod), result.x, result.y, layerCount, mipCount);
+		return uint3(result, layerCount);
+	}
+
+	// Inputs/outputs
+	#if defined(PASTA_VERTEX_SHADER)
+		// system inputs
+		#define S_VertexId          S_VERTEX_ID
+		#define S_InstanceId        S_INSTANCE_ID
+
+		// system outputs
+		#define S_Position          S_POSITION
+		#define S_PointSize         S_POINT_SIZE
+		#define S_ClipDistance0     S_CLIP_DISTANCE0
+		#define S_ClipDistance1     S_CLIP_DISTANCE1
+
+		#define _IN(type, name) in type name _SEMANTIC(name)
+		#define _OUT(interp, type, name) out type name _SEMANTIC(name)
+		#define _OUT_BLOCK(type, name)   out type name _SEMANTIC(name)
+
+	#elif defined(PASTA_FRAGMENT_SHADER)
+		// system inputs
+		#define S_Position        S_POSITION
+		#define S_FrontFace       S_FRONT_FACE
+		#define S_PointCoord      S_POINT_COORD
+		#define S_SampleId        S_SAMPLE_INDEX
+		#define S_LayerId         S_RENDER_TARGET_INDEX
+		#define S_ViewportId      S_VIEWPORT_INDEX
+		#define S_ClipDistance0   S_CLIP_DISTANCE0
+		#define S_ClipDistance1   S_CLIP_DISTANCE1
+
+		// system outputs
+		#define DEPTH_ANY      S_DEPTH_OUTPUT
+		#define DEPTH_GREATER  S_DEPTH_GE_OUTPUT
+		#define DEPTH_LESS     S_DEPTH_LE_OUTPUT
+
+	// \hack compiler incorrectly generates nopersp instruction when linear is explicitly specified
+	#define linear
+
+		#define _IN(interp, type, name) in type interp name _SEMANTIC(name)
+		#define _IN_BLOCK(type, name)   in type name _SEMANTIC(name)
+
+		#define _OUT(type, name, index) out type name _SEMANTIC(S_TARGET_OUTPUT ## index)
+		#define _OUT_DEPTH(qualifier)   out float S_Depth _SEMANTIC(qualifier)
+
+	#elif defined(PASTA_COMPUTE_SHADER)
+		// system inputs
+		#define S_GroupId         S_GROUP_ID
+		#define S_LocalId         S_GROUP_THREAD_ID
+		#define S_GlobalId        S_DISPATCH_THREAD_ID
+		#define S_LocalIndex      S_GROUP_INDEX
+		
+		in uint3 S_GROUP_ID           _SEMANTIC(S_GROUP_ID);
+		in uint3 S_GROUP_THREAD_ID    _SEMANTIC(S_GROUP_THREAD_ID);
+		in uint3 S_DISPATCH_THREAD_ID _SEMANTIC(S_DISPATCH_THREAD_ID);
+		in uint  S_GROUP_INDEX        _SEMANTIC(S_GROUP_INDEX);
+
+	#endif
+
+/*******************************************************************************
+	
+                                    GLSL
+	
+*******************************************************************************/
+#elif defined(PASTA_GLSL)
+	#define PASTA_PSSL_ONLY(x)
+	#define PASTA_GLSL_ONLY(x) x
+
+	#define _ARRAY_INIT_BEGIN(type) type [](
+	#define _ARRAY_INIT_END()       )
+
+	#define static
+
+	#define PASTA_TCO_BOTTOM_LEFT
+
+	#ifdef PASTA_DEBUG
+		#pragma optimize(off)
+		#pragma debug(on)
+	#else
+		#pragma optimize(on)
+		#pragma debug(off)
+	#endif
+
+	struct DrawArraysIndirectCmd
+	{
+		uint m_count;
+		uint m_primCount;
+		uint m_first;
+		uint m_baseInstance;
+	};
+	
+	struct DrawElementsIndirectCmd
+	{
+		uint m_count;
+		uint m_primCount;
+		uint m_firstIndex;
+		uint m_baseVertex;
+		uint m_baseInstance;
+	};
+	
+	struct DispatchIndirectCmd
+	{
+		uint m_groupsX;
+		uint m_groupsY;
+		uint m_groupsZ;
+	};
+
+	// Directives
+	#define _BRANCH
+	#define _FLATTEN
+	#define _UNROLL(x)
+	#define _LOOP
+	#if (__VERSION__ >= 420)
+		#define _FORCE_EARLY_DEPTH_STENCIL	layout(early_fragment_tests) in;
+	#else
+		#define _FORCE_EARLY_DEPTH_STENCIL
+	#endif
+
+	#define _SEMANTIC(x)
+	#define _REGISTER(x)
+
+	// Type qualifiers
+	#define nointerpolation     flat
+	#define linear              smooth
+
+	// Data types (scalars, vectors, matrices, resources)
+	#define char                int
+	#define	short               int
+	#define	half                float
+
+	#define	bool2               bvec2
+	#define	bool3               bvec3
+	#define	bool4               bvec4
+	#define float2              vec2
+	#define float3              vec3
+	#define float4              vec4
+	#define double2             dvec2
+	#define double3             dvec3
+	#define double4             dvec4
+	#define int2                ivec2
+	#define int3                ivec3
+	#define int4                ivec4
+	#define uint2               uvec2
+	#define uint3               uvec3
+	#define uint4               uvec4
+			
+	#define float2x2            mat2
+	#define float2x3            mat3x2
+	#define float2x4            mat4x2
+	#define float3x2            mat2x3
+	#define float3x3            mat3
+	#define float3x4            mat4x3
+	#define float4x2            mat2x4
+	#define float4x3            mat3x4
+	#define float4x4            mat4	
+	#define double2x2           dmat2
+	#define double2x3           dmat3x2
+	#define double2x4           dmat4x2
+	#define double3x2           dmat2x3
+	#define double3x3           dmat3
+	#define double3x4           dmat4x3
+	#define double4x2           dmat2x4
+	#define double4x3           dmat3x4
+	#define double4x4           dmat4
+			
+	#define Texture1D           sampler1D
+	#define Texture1D_int       isampler1D
+	#define Texture1D_uint      usampler1D
+	#define Texture2D           sampler2D
+	#define Texture2D_int       isampler2D
+	#define Texture2D_uint      usampler2D
+	#define Texture3D           sampler3D
+	#define Texture3D_int       isampler3D
+	#define Texture3D_uint      usampler3D
+	#define TextureCube         samplerCube
+	#define Texture1DArray      sampler1DArray
+	#define Texture2DArray      sampler2DArray
+	#define Texture2DArray_int  isampler2DArray
+	#define Texture2DArray_uint usampler2DArray
+	#define SamplerState        int
+
+	#define CBuffer             layout(std140) uniform
+
+	#define _RWBUFFER(t,name)         layout(std430) buffer name { t _buffer ## name []; }
+	#define _RBUFFER(t,name)          layout(std430) buffer name { t _buffer ## name []; }
+	#define _WBUFFER(t,name)          layout(std430) buffer name { t _buffer ## name []; }
+	#define _BUFFER_DATA(name, idx)  _buffer ## name [idx]
+	#define _BUFFER_SIZE(name,retStride,retCount) retCount = _buffer ## name .length()
+
+
+	#define InterfaceBlock
+
+	// Matrix access
+	float2 getRow(in float2x2 m, in uint r)                                 { return float2(m[0][r], m[1][r]); } 
+	float3 getRow(in float3x3 m, in uint r)                                 { return float3(m[0][r], m[1][r], m[2][r]); } 
+	float4 getRow(in float4x4 m, in uint r)                                 { return float4(m[0][r], m[1][r], m[2][r], m[3][r]); } 
+	float4 getRow(in float3x4 m, in uint r)                                 { return float4(m[0][r], m[1][r], m[2][r], m[3][r]); } 
+	float2 getCol(in float2x2 m, in uint c)                                 { return m[c]; } 
+	float3 getCol(in float3x3 m, in uint c)                                 { return m[c]; }
+	float4 getCol(in float4x4 m, in uint c)                                 { return m[c]; }
+	float3 getCol(in float3x4 m, in uint c)                                 { return m[c]; }
+	void   setRow(inout float2x2 m, in uint r, in float2 v)                 { m[0][r] = v.x; m[1][r] = v.y; } 
+	void   setRow(inout float3x3 m, in uint r, in float3 v)                 { m[0][r] = v.x; m[1][r] = v.y; m[2][r] = v.z; } 
+	void   setRow(inout float4x4 m, in uint r, in float4 v)                 { m[0][r] = v.x; m[1][r] = v.y; m[2][r] = v.z; m[3][r] = v.w; }
+	void   setRow(inout float3x4 m, in uint r, in float4 v)                 { m[0][r] = v.x; m[1][r] = v.y; m[2][r] = v.z; m[3][r] = v.w; } 
+	void   setCol(inout float2x2 m, in uint c, in float2 v)                 { m[c] = v; } 
+	void   setCol(inout float3x3 m, in uint c, in float3 v)                 { m[c] = v; }
+	void   setCol(inout float4x4 m, in uint c, in float4 v)                 { m[c] = v; }
+	void   setCol(inout float3x4 m, in uint c, in float3 v)                 { m[c] = v; }
+	void   setCols(inout float2x2 m, in float2 a, in float2 b)              { m = float2x2(a, b); }
+	void   setCols(inout float3x3 m, in float3 a, in float3 b, in float3 c) { m = float3x3(a, b, c); }
+	void   setRows(inout float2x2 m, in float2 a, in float2 b)              { m = float2x2(a.x, b.x, a.y, b.y); }
+	void   setRows(inout float3x3 m, in float3 a, in float3 b, in float3 c) { m = float3x3(a.x, b.x, c.x, a.y, b.y, c.y, a.z, b.z, c.z); }
+	float  getVal(in float2x2 m, in uint r, in uint c)                      { return m[c][r]; }
+	float  getVal(in float3x3 m, in uint r, in uint c)                      { return m[c][r]; }
+	float  getVal(in float4x4 m, in uint r, in uint c)                      { return m[c][r]; }
+	float  getVal(in float3x4 m, in uint r, in uint c)                      { return m[c][r]; }
+	void   setVal(inout float2x2 m, in uint r, in uint c, in float v)       { m[c][r] = v; }
+	void   setVal(inout float3x3 m, in uint r, in uint c, in float v)       { m[c][r] = v; }
+	void   setVal(inout float4x4 m, in uint r, in uint c, in float v)       { m[c][r] = v; }
+	void   setVal(inout float3x4 m, in uint r, in uint c, in float v)       { m[c][r] = v; }
+
+
+	// Packing
+	#define pack_float2_uint(x)   packHalf2x16(x)
+	#define unpack_uint_float2(x) unpackHalf2x16(x)
+
+	// Atomics/barriers
+	#define AtomicAddReturn(_dst, _v, ret_)      ret_ = atomicAdd(_dst, _v)
+	#define AtomicAdd(_dst, _v)                  atomicAdd(_dst, _v)
+	#define AtomicExchangeReturn(_dst, _v, ret_) ret_ = atomicExchange(_dst, _v)
+	#define AtomicExchange(_dst, _v)             atomicExchange(_dst, _v)
+	#define AtomicMaxReturn(_dst, _v, ret_)      ret_ = atomicMax(_dst, _v)
+	#define AtomicMax(_dst, _v)                  atomicMax(_dst, _v)
+
+	// Arithmetic/logic functions (alphabetical order)
+	#define cndMask(cnd,x,y)      ((cnd) ? (x) : (y))
+	#define atan2(x, y)           atan(x, y)
+	#define dst(x,y)              distance(x,y)
+	#define ddx(x)                dFdx(x)
+	#define ddy(x)                dFdy(x)
+	#define ddx_coarse(x)         dFdxCoarse(x)
+	#define ddy_coarse(x)         dFdyCoarse(x)
+	#define ddx_fine(x)           dFdxFine(x)
+	#define ddy_fine(x)           dFdyFine(x)				
+	#define frac(x)               fract(x)			
+	#define invariant_mod(x, y)   (mod(x, y))
+	#define lerp(x,y,s)           mix(x, y, s)
+	#define log10(x)              (log2(x) / log2(10))				
+	#define mad(m,a,b)            ((m * a) + b)
+	#define max3(x,y,z)           max(x, max(y, z))
+	#define min3(x,y,z)           min(x, min(y, z))
+	#define mul(x,y)              (x * y)
+	#define mul24(x,y)            (x * y)
+	#define mul24_hi(x,y)         (x * y)			
+	#define saturate(x)           clamp(x, 0.0, 1.0)
+
+	float3 transformPosition(in float4x4 m,  in float3 v) { return mul(m, float4(v.xyz, 1.0)).xyz; }
+	float3 transformPosition(in float3x4 m,  in float3 v) { return mul(m, float4(v.xyz, 1.0)).xyz; }
+	float3 transformDirection(in float4x4 m, in float3 v) { return mul(float3x3(m), v); }
+	float3 transformDirection(in float3x3 m, in float3 v) { return mul(m, v); }
+	float3 transformDirection(in float3x4 m, in float3 v) { return mul(float3x3(m), v).xyz; }
+
+	// Resource functions (alphabetical order)
+	#define fetch(tx,uv)                        texelFetch(tx, uv, 0)
+	#define	fetchLod(tx,uv,ld)                  texelFetch(tx, uv, ld)
+	#define	fetchOffset(tx,uv,of)               texelFetchOffset(tx, uv, 0, of)
+	#define	fetchLodOffset(tx,uv,of,ld)         texelFetchOffset(tx, uv, ld, of)
+
+	#define gatherA(tx,ss,uv)                   textureGather(tx, uv, 3)
+	#define gatherB(tx,ss,uv)                   textureGather(tx, uv, 2)
+	#define gatherG(tx,ss,uv)                   textureGather(tx, uv, 1)
+	#define gatherR(tx,ss,uv)                   textureGather(tx, uv, 0)
+	#define gatherLodA(tx,ss,uv,ld)             textureGather(tx, uv, 3)
+	#define gatherLodB(tx,ss,uv,ld)             textureGather(tx, uv, 2)
+	#define gatherLodG(tx,ss,uv,ld)             textureGather(tx, uv, 1)
+	#define gatherLodR(tx,ss,uv,ld)             textureGather(tx, uv, 0)
+
+	#define queryLod(tx,ss,uv)                  (textureQueryLod(tx,uv).y)
+
+	#define sample(tx,ss,uv)                    texture(tx, uv)
+	#define sampleGrad(tx,ss,uv,dx,dy)          textureGrad(tx, uv, dx, dy)
+	#define sampleLod(tx,ss,uv,ld)              textureLod(tx, uv, ld)
+	#define sampleOffset(tx,ss,uv,of)           textureOffset(tx, uv, of)
+	#define sampleGradOffset(tx,ss,uv,dx,dy,of) textureGradOffset(tx, uv, dx, dy, of)
+	#define sampleLodOffset(tx,ss,uv,ld,of)     textureLodOffset(tx, uv, ld, of)
+
+	// Inputs/outputs
+	#if	defined(PASTA_VERTEX_SHADER)
+		// system inputs
+		#define S_VertexId       gl_VertexID
+		#define S_InstanceId     gl_InstanceID
+
+		// system outputs
+		#define S_Position       gl_Position
+		#define S_PointSize      gl_PoinstSize
+		#define S_ClipDistance0  gl_ClipDistance[0]
+		#define S_ClipDistance1  gl_ClipDistance[1]
+
+
+		#define _OUT(interp, type, name) interp out type name _SEMANTIC(name)
+		#define _OUT_BLOCK(type, name)   out type name _SEMANTIC(name)
+		#define _IN(type, name)          in type name
+
+	#elif defined(PASTA_FRAGMENT_SHADER)
+		// system inputs
+		#define S_Position       gl_FragCoord
+		#define S_FrontFace      gl_FrontFacing
+		#define S_PointCoord     gl_PointCoord
+		#define S_SampleId       gl_SampleID
+		#define S_LayerId        gl_Layer
+		#define S_ViewportId     gl_ViewportIndex
+		#define S_ClipDistance0  gl_ClipDistance[0]
+		#define S_ClipDistance1  gl_ClipDistance[1]
+
+		// system outputs		
+		#define S_Depth          gl_FragDepth
+
+		//#extension GL_ARB_conservative_depth : enable
+		#ifdef GL_ARB_conservative_depth			
+			#define DEPTH_ANY     layout(depth_any)
+			#define DEPTH_GREATER layout(depth_greater)
+			#define DEPTH_LESS    layout(depth_less)
+		#else
+			#define DEPTH_ANY
+			#define DEPTH_GREATER
+			#define DEPTH_LESS
+		#endif
+	
+		#define _IN(interp, type, name) interp in type name
+		#define _IN_BLOCK(type, name)   in type name
+		#define _OUT(type,name,index)  layout(location = index) out type name
+		#define _OUT_DEPTH(qualifier)  qualifier out float S_Depth
+
+	#elif defined(PASTA_COMPUTE_SHADER)
+		#define S_GroupId         gl_WorkGroupID
+		#define S_LocalId         gl_LocalInvocationID
+		#define S_GlobalId        gl_GlobalInvocationID
+		#define S_LocalIndex      gl_LocalInvocationIndex
+
+	#endif
+
+#else
+	#error (platform.shl) No platform defined
+#endif
+
+
+/*******************************************************************************
+	
+                                 Misc
+	
+*******************************************************************************/
+
+#if defined(PASTA_VERTEX_SHADER)
+	#define _ATTRIBUTE(type, name) _IN(type, name)
+	#define _VARYING(interp, type, name) _OUT(interp, type, name)
+#elif defined(PASTA_FRAGMENT_SHADER)
+	#define _ATTRIBUTE(type, name)
+	#define _VARYING(interp, type, name) _IN(interp, type, name)
+#endif
+
+// shaders must define _EXPORT_name(value) and _IMPORT_name
+#define _EXPORT(name, value) _EXPORT_##name(value)
+#define _IMPORT(name) _IMPORT_##name
+
+
+void setRotation(inout float4x4 m, in float3x3 rm) 
+{
+	m[0].xyz = rm[0].xyz;
+	m[1].xyz = rm[1].xyz;
+	m[2].xyz = rm[2].xyz;
+}
+void setRotation(inout float3x4 m, in float3x3 rm) 
+{
+	m[0].xyz = rm[0].xyz;
+	m[1].xyz = rm[1].xyz;
+	m[2].xyz = rm[2].xyz;
+}
+
+void setTranslation(inout float4x4 m, in float3 t) 
+{
+	setVal(m, uint(0), uint(3), t.x);
+	setVal(m, uint(1), uint(3), t.y);
+	setVal(m, uint(2), uint(3), t.z);
+}
+void setTranslation(inout float3x4 m, in float3 t) 
+{
+	setVal(m, uint(0), uint(3), t.x);
+	setVal(m, uint(1), uint(3), t.y);
+	setVal(m, uint(2), uint(3), t.z);
+}
+
+#endif // COMMON_PLATFORM_SHL
