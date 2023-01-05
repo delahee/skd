@@ -2,11 +2,15 @@
 #include "rd/Agent.hpp"
 #include "rd/ext/Interp.hpp"
 
+class Game;
+
 namespace r2 { class Node; }
 namespace rui { class Canvas; }
 
 
 struct Path : rd::Agent {
+	Game* g = 0;
+
 	typedef rd::Agent Super;
 	Path(rd::AgentList* al) : Super(al) {
 
@@ -20,6 +24,7 @@ struct Path : rd::Agent {
 	void add(const r::Vector2& p) { data.data.push_back(p); };
 	void update(double dt);
 	void reflectProgress(r2::Bitmap* c, float p);
+	void debugDraw();
 };
 
 struct TileBrush {
@@ -37,14 +42,16 @@ enum class PaintMode : int {
 
 
 struct Tool{
-	bool						allowTilePaint = true;
-	int							mode = int(PaintMode::None);
+	bool								allowTilePaint = true;
+	int									mode = int(PaintMode::None);
 
-	int							brush = 0;
+	int									brush = 0;
 
 	eastl::vector<int>					map;
 	std::vector<Vector2>				towerSpot;
 	eastl::vector<TileBrush>			painter;
+
+	Game*								g=0;
 
 	static inline int			cell2int(int x,int y){
 		return (y << 8) | x;
@@ -58,7 +65,6 @@ struct Tool{
 class Game : rd::Agent {
 public:
 	typedef rd::Agent Super;
-
 	Tool			tool;
 	r2::Node*		root = 0;
 	r2::Node*		board = 0;
@@ -69,6 +75,14 @@ public:
 
 	rd::ABitmap*	bossPortrait = 0;
 	rd::ABitmap*	kiwiPortrait = 0;
+
+	Path*			path=0;
+
+	r2::Flow*		livesFlow = 0;
+
+	void			victory();
+	void			defeat();
+	void			hit();
 
 					Game(r2::Scene* sc, rd::AgentList* parent);
 	virtual void	update(double dt);

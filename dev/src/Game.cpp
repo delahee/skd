@@ -10,11 +10,49 @@
 #include <EASTL/variant.h>
 #include "rd/Garbage.hpp"
 
+void Game::defeat(){
+	auto sc = root->getScene();
+	auto n = new r2::Node(sc);
+	n->x = sc->getPanX();
+	n->y = sc->getPanY();
+	auto r = r2::Bitmap::fromColor(r::Color::Red, n);
+	r->setSize(rs::Display::width(),rs::Display::height());
+	auto txt = new r2::Text(nullptr,"DEFEAT!", n);
+	txt->setBlockAlign(r2::Text::ALIGN_CENTER);
+	txt->x = 280;
+	txt->y = 150;
+	txt->scaleX = txt->scaleY = sc->getZoomY();
+}
+
+void Game::victory() {
+	auto sc = root->getScene();
+	auto n = new r2::Node(sc);
+	n->x = sc->getPanX();
+	n->y = sc->getPanY();
+	auto r = r2::Bitmap::fromColor(r::Color::Green, n);
+	r->setSize(rs::Display::width(), rs::Display::height());
+	auto txt = new r2::Text(nullptr, "VICTORY!", n);
+	txt->setBlockAlign(r2::Text::ALIGN_CENTER);
+	txt->x = 280;
+	txt->y = 150;
+	txt->scaleX = txt->scaleY = sc->getZoomY();
+}
+
+void Game::hit() {
+	if( 0 == livesFlow->nbChildren()){
+		defeat();
+	}
+	else {
+		livesFlow->children[0]->destroy();
+	}
+}
+
 Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	root = new r2::StaticBox( r2::Bounds::fromTLWH(0,0,Cst::W,Cst::H),sc);
 	
 	Data::init();
 
+	tool.g = this;
 	board = new r2::Graphics(root);
 	board->name = "board";
 	board->y += 10;
@@ -27,6 +65,15 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	bg->name = "bg";
 	cells = new r2::Node(board);
 
+	{
+		auto p = path = new Path(&al);
+		p->g = this;
+		p->cursor = r2::Bitmap::fromColor(r::Color::Cyan, cells);
+		p->cursor->setSize(Cst::GRID, Cst::GRID);
+		p->add(Vector2(Cst::GRID * 0.5, Cst::GRID * 0.5));
+		p->add(Vector2(Cst::W * 0.5 - Cst::GRID * 0.5, Cst::H * 0.5 - Cst::GRID * 0.5));
+		p->add(Vector2(Cst::W - Cst::GRID * 0.5, Cst::H - Cst::GRID * 0.5));
+	}
 	loadMap();
 	
 	for(int y = 0; y < Cst::GRID_H+1;++y)
@@ -36,12 +83,7 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 		}
 	grid->color = r::Color::Orange.mulAlpha(0.5);
 
-	auto p = new Path(&al);
-	p->cursor = r2::Bitmap::fromColor(r::Color::AcidGreen, cells);
-	p->cursor->setSize(Cst::GRID, Cst::GRID);
-	p->add( Vector2(Cst::GRID * 0.5, Cst::GRID * 0.5 ));
-	p->add( Vector2(Cst::W*0.5 - Cst::GRID * 0.5, Cst::H*0.5 - Cst::GRID * 0.5 ));
-	p->add( Vector2(Cst::W - Cst::GRID * 0.5, Cst::H - Cst::GRID * 0.5 ));
+	
 
 	bossPortrait = rd::ABitmap::fromLib(Data::assets,"pixel",root);
 	bossPortrait->setCenterRatio(0.5, 1);
@@ -57,8 +99,16 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	kiwiPortrait->y = 167;
 	kiwiPortrait->player.speed = 0.66f;
 
-	
-	//put up with one path
+	livesFlow = new r2::Flow(root);
+	for(int i = 0; i < 5; i++){
+		auto ra = rd::ABitmap::mk("kiwi_head", Data::assets, livesFlow);
+		ra->setCenterRatio();
+	}
+	livesFlow->x = 32;
+	livesFlow->y = 270;
+	livesFlow->horizontalSpacing = 10;
+	livesFlow->reflow();
+
 	// put up with one enemy
 	//add lives
 	//add wave
@@ -79,12 +129,10 @@ void Game::update(double dt) {
 }
 
 template <> void Pasta::JReflect::visit(std::vector<Vector2> & v, const char* name) {
-	u32 size = v.size();
-	visit(size, "vecSize");
-	if (isReadMode())
-		v.resize(size);
-	u32 arrSize = size * 2;
+	u32 arrSize = v.size()*2;
 	if (visitArrayBegin(name, arrSize)) {
+		if (isReadMode())
+			v.resize(arrSize<<1);
 		for (u32 i = 0; i < arrSize; ++i) {
 			visitIndexBegin(i);
 			Vector2& vf = v[i>>1];
@@ -96,12 +144,31 @@ template <> void Pasta::JReflect::visit(std::vector<Vector2> & v, const char* na
 		}
 	}
 	visitArrayEnd(name);
-	
+}
+
+static void visitEastl(Pasta::JReflect&jr,eastl::vector<Vector2>& v, const char* name) {
+	u32 arrSize = v.size() * 2;
+	if (jr.visitArrayBegin(name, arrSize)) {
+		if (jr.isReadMode())
+			if( v.size() < arrSize >>1)
+				v.resize(arrSize >> 1);
+		for (u32 i = 0; i < arrSize; ++i) {
+			jr.visitIndexBegin(i);
+			Vector2& vf = v[i >> 1];
+			if (0 == (i & 1))
+				jr.visit(vf.x, nullptr);
+			else
+				jr.visit(vf.y, nullptr);
+			jr.visitIndexEnd();
+		}
+	}
+	jr.visitArrayEnd(name);
 }
 
 template<> void Pasta::JReflect::visit(Tool&t, const char* name) {
 	visit(t.map, "map");
 	visit(t.towerSpot, "towerSpot");
+	visitEastl(*this,t.g->path->data.data, "path");
 }
 
 void Tool::save(){
@@ -123,6 +190,15 @@ void Game::im(){
 	Begin("Game", &opened);
 	Value("dt", rs::Timer::dt);
 	Value("fps", std::lrint(1.0f / rs::Timer::dt));
+
+
+	if(TreeNodeEx("action",1)){
+		if (Button("defeat"))
+			defeat();
+		if (Button("victory"))
+			victory();
+		TreePop();
+	}
 
 	static bool paintMode = false;
 	Checkbox("paintmode", &paintMode);
@@ -176,7 +252,7 @@ void Game::im(){
 				}
 			}
 
-			if(isMouseJustPressed){
+			if(rs::Sys::isMousePressed){
 				if (cposi.x >= 0 && cpos.y >= 0) {
 
 					for (int sy = 0; sy < brushSize; sy++)
@@ -192,10 +268,39 @@ void Game::im(){
 			}
 		}
 
+		if(tool.mode == (int)PaintMode::Path){
+			DragFloat("progress",&path->progress);
+			if (Button("clear")) {
+				path->data.data.clear();
+				tool.save();
+			}
+
+			if (isMouseJustPressed && cpos.x >= 0 && cpos.y >= 0) {
+
+				Vector2 dst = Vector2((cposi.x + 0.5) * Cst::GRID, (cposi.y + 0.5) * Cst::GRID);
+
+				auto& buf = path->data.data;
+				auto iter = buf.begin();
+				while (iter != buf.end()) {
+
+					if (( (*iter) - dst ).getNorm() < 5)
+						break;
+					iter++;
+				}
+
+				if(iter != buf.end())
+					path->data.data.erase(iter);
+				else 
+					path->data.data.push_back(dst);
+				tool.save();
+			}
+
+			path->debugDraw();
+		}
+
 		if (tool.mode == (int)PaintMode::Tower) {
 			if (isMouseJustPressed) {
 				if (cpos.x >= 0 && cpos.y >= 0) {
-
 					auto iter = tool.towerSpot.begin();
 					while(iter!= tool.towerSpot.end()){
 						if (((*iter) - mpos).getNorm() < 10)
@@ -290,15 +395,18 @@ void Game::dressMap(){
 void Path::update(double dt) {
 	Super::update(dt);
 
+	if (data.size() < 2)
+		return;
+
 	float speed = 0.1f;
-	if( progress >= data.size()-2){
+	if( progress >= 1.0f){
 		progress = 0;
 	}
 	else {
 		progress += dt * speed;
 	}
 
-	progress = r::Math::clamp(progress, 0, data.size() - 2);
+	progress = r::Math::clamp(progress, 0, 1.0f);
 	reflectProgress(cursor, progress);
 }
 
@@ -307,5 +415,15 @@ void Path::reflectProgress(r2::Bitmap* c, float p){
 	c->x = pos.x;
 	c->y = pos.y;
 	c->trsDirty = true;
+}
+
+void Path::debugDraw() {
+	for(int i = 0; i < data.size();++i){
+		Vector2 p = data.data[i];
+		r2::Im::outerRect( r2::Bounds::fromTLBR(p.y-1,p.x-1,p.y+1,p.x+1), r::Color::Blue, g->cells);
+		for(int j = 0; j < 50;++j){
+			
+		}
+	}
 }
 

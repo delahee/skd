@@ -23,6 +23,7 @@ public:
 
 	void			onResize(const r::Vector2i& sz);
 	void			testGame();
+	void			testUnit();
 
 	r2::Scene *		mainScene = nullptr;
 };

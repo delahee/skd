@@ -28,10 +28,39 @@ void updateTools(){
 
 }
 
+
+static void regularBloom(PixelScene* dts, float durMs) {
+	if (durMs < 0) 2;
+	if (!dts) return;
+
+	dts->uber.bloomEnabled = true;
+	dts->uber.pyramidSize = 5;
+	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_INTENSITY, 0.14, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_THRESH, 0.95, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_KNEE, 0.60, TType::TEaseOut, durMs);
+
+	r::Color basicBiomeBloomColor(0.3f, 0.5, 0.4f);
+
+	r::Color c = basicBiomeBloomColor;
+	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CR, c.r, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CG, c.g, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CB, c.b, TType::TEaseOut, durMs);
+}
+
+void App_GameState::testUnit(){
+	mainScene = new r2::Scene();
+	auto t = new r2::Text(nullptr, "SAPIN!", mainScene);
+	t->x = 100;
+	t->y = 100;
+}
+
 void App_GameState::testGame(){
 	if(mainScene == nullptr){
-		//mainScene = new PixelScene(Cst::W,Cst::H);
-		mainScene = new r2::Scene();
+		PixelScene* ps = nullptr;
+		ps = new PixelScene(Cst::W,Cst::H);
+		ps->clearColor = r::Color::Blue;
+		regularBloom(ps,-1);
+		mainScene = ps;
 		float s = (int)rs::Display::height() / Cst::H;
 		mainScene->setZoom(s, s);
 
@@ -77,7 +106,7 @@ App_GameState::App_GameState() {
 	}
 
 	
-
+	//testUnit();
 	testGame();
 }
 
