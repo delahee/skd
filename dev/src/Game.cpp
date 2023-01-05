@@ -7,6 +7,8 @@
 
 #include "Game.hpp"
 #include "rd/JSerialize.hpp"
+#include <EASTL/variant.h>
+#include "rd/Garbage.hpp"
 
 Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	root = new r2::StaticBox( r2::Bounds::fromTLWH(0,0,Cst::W,Cst::H),sc);
@@ -20,9 +22,13 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	auto b = new r2::Bitmap(r2::Tile::fromWhite(), board);
 	b->setSize(Cst::W, Cst::H);
 
-	loadMap();
+	r2::Graphics* grid = new r2::Graphics(board);//create layers
+	bg = new r2::Batch(board);
+	bg->name = "bg";
+	cells = new r2::Node(board);
 
-	r2::Graphics* grid = new r2::Graphics(board);
+	loadMap();
+	
 	for(int y = 0; y < Cst::GRID_H+1;++y)
 		for (int x = 0; x < Cst::GRID_W+1; ++x) {
 			grid->drawLine(Vector2(x * Cst::GRID, 0), Vector2(x * Cst::GRID, Cst::H),1);
@@ -30,7 +36,6 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 		}
 	grid->color = r::Color::Orange.mulAlpha(0.5);
 
-	cells = new r2::Node(board);
 	auto p = new Path(&al);
 	p->cursor = r2::Bitmap::fromColor(r::Color::AcidGreen, cells);
 	p->cursor->setSize(Cst::GRID, Cst::GRID);
@@ -73,18 +78,48 @@ void Game::update(double dt) {
 	im();	
 }
 
+template <> void Pasta::JReflect::visit(std::vector<Vector2> & v, const char* name) {
+	u32 size = v.size();
+	visit(size, "vecSize");
+	if (isReadMode())
+		v.resize(size);
+	u32 arrSize = size * 2;
+	if (visitArrayBegin(name, arrSize)) {
+		for (u32 i = 0; i < arrSize; ++i) {
+			visitIndexBegin(i);
+			Vector2& vf = v[i>>1];
+			if( 0==(i & 1) )
+				visit(vf.x, nullptr);
+			else
+				visit(vf.y, nullptr);
+			visitIndexEnd();
+		}
+	}
+	visitArrayEnd(name);
+	
+}
+
+template<> void Pasta::JReflect::visit(Tool&t, const char* name) {
+	visit(t.map, "map");
+	visit(t.towerSpot, "towerSpot");
+}
+
 void Tool::save(){
-	rs::jSerialize(map, "editor", "map.json","map");
+	rs::jSerialize(*this, "editor", "map.json", "all");
 }
 
 void Tool::load() {
-	rs::jDeserialize(map, "editor", "map.json", "map");
+	rs::jDeserialize(*this, "editor", "map.json", "all");
 }
 
 void Game::im(){
+	static bool wasMousePressed = false;
+
 	using namespace ImGui;
 
 	static bool opened = true;
+
+	bool isMouseJustPressed = !wasMousePressed && rs::Sys::isMousePressed;
 	Begin("Game", &opened);
 	Value("dt", rs::Timer::dt);
 	Value("fps", std::lrint(1.0f / rs::Timer::dt));
@@ -97,9 +132,16 @@ void Game::im(){
 		static int brushSize = 1;
 		DragInt("brushSize", &brushSize);
 		if (Button("erase"))
-			tool.mode = 0;
-		if (Button("paint ground"))
-			tool.mode = 1;
+			tool.mode = (int)PaintMode::Erase;
+		SameLine();
+		if (Button("pnt ground"))
+			tool.mode = (int)PaintMode::Ground;
+		SameLine();
+		if (Button("pnt path"))
+			tool.mode = (int)PaintMode::Path;
+		SameLine();
+		if (Button("pnt towers"))
+			tool.mode = (int)PaintMode::Tower;
 		SameLine();
 		NewLine();
 
@@ -107,6 +149,9 @@ void Game::im(){
 		auto mpos = root->getGlobalMatrix() * sc->getViewMatrix().inverse() * Vector2(rs::Sys::mouseX, rs::Sys::mouseY) - board->getPos();
 		auto cpos = mpos / Cst::GRID;
 		Vector2i cposi{ int(cpos.x),int(cpos.y) };
+
+		Value("mpos", mpos);
+		Value("cpos", cpos);
 
 		if (tool.mode == 0) {
 			if (rs::Sys::isMousePressed) {
@@ -124,25 +169,14 @@ void Game::im(){
 				}
 			}
 		}
-		if(tool.mode == 1){
-			Value("mpos", mpos);
-			Value("cpos", cpos);
-
-			if (Button("Save")) {
-				tool.save();
-			}
-
-			if (Button("Load")) {
-				tool.load();
-			}
-
+		if(tool.mode == (int)PaintMode::Ground){
 			for (int i = 0; i < tool.painter.size(); i++) {
 				if( ImGui::RadioButton(tool.painter[i].name.c_str(), tool.brush ==i)){
 					tool.brush = i;
 				}
 			}
 
-			if(rs::Sys::isMousePressed){
+			if(isMouseJustPressed){
 				if (cposi.x >= 0 && cpos.y >= 0) {
 
 					for (int sy = 0; sy < brushSize; sy++)
@@ -157,8 +191,39 @@ void Game::im(){
 				}
 			}
 		}
+
+		if (tool.mode == (int)PaintMode::Tower) {
+			if (isMouseJustPressed) {
+				if (cpos.x >= 0 && cpos.y >= 0) {
+
+					auto iter = tool.towerSpot.begin();
+					while(iter!= tool.towerSpot.end()){
+						if (((*iter) - mpos).getNorm() < 10)
+							break;
+						iter++;
+					}
+					if (iter == tool.towerSpot.end())
+						tool.towerSpot.push_back(mpos);
+					else
+						tool.towerSpot.erase(iter);
+
+					tool.save();
+					dressMap();
+				}
+			}
+		}
+
+		if (Button("Save")) {
+			tool.save();
+		}
+
+		if (Button("Load")) {
+			tool.load();
+		}
 	}
 	End();
+
+	wasMousePressed = rs::Sys::isMousePressed;
 }
 
 void Game::loadMap() {
@@ -183,8 +248,6 @@ void Game::loadMap() {
 		tool.painter.push_back(tb);
 	}
 
-	bg = new r2::Batch(board);
-	bg->name = "bg";
 	tool.load();
 	dressMap();
 }
@@ -206,6 +269,20 @@ void Game::dressMap(){
 		el->setSize(Cst::GRID, Cst::GRID);
 		el->x = x * Cst::GRID;
 		el->y = y * Cst::GRID;
+	}
+
+	for (auto b : cells->children) 
+		if( b->vars.getStr("gpType") == "tower")
+			rd::Garbage::trash(b);
+	
+	for (auto &sp : tool.towerSpot) {
+		auto b = rd::ABitmap::mk("partCircle", Data::assets, cells);
+		b->vars.set("gpType","tower");
+		b->setCenterRatio(0.5, 0.5);
+		b->setSize(Cst::GRID, Cst::GRID);
+		b->x = (int)sp.x;
+		b->y = (int)sp.y;
+		b->color = r::Color::Magenta;
 	}
 }
 

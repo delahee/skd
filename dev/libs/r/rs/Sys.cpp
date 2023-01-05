@@ -22,6 +22,7 @@
 #include "InputEvent.hpp"
 #include "Sys.hpp"
 #include "rd/Tween.hpp"
+#include "rd/Garbage.hpp"
 
 using namespace Pasta;
 using namespace std;
@@ -237,6 +238,7 @@ void rs::Sys::init() {
 	exitFrameProcesses.name = "exitFrameProcesses";
 
 	sysAsserts();
+	rd::Garbage::init();
 }
 
 unsigned int rs::Sys::uintFromString(const char * val){

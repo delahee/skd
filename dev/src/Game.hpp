@@ -27,21 +27,33 @@ struct TileBrush {
 	r2::Tile*	t = nullptr;
 };
 
+enum class PaintMode : int {
+	Erase,
+	Ground,
+	Path,
+	Tower,
+	None = -1
+};
+
+
 struct Tool{
 	bool						allowTilePaint = true;
-	int							mode = -1;
+	int							mode = int(PaintMode::None);
 
 	int							brush = 0;
 
-	eastl::vector<int>			map;
-	eastl::vector<TileBrush>	painter;
+	eastl::vector<int>					map;
+	std::vector<Vector2>				towerSpot;
+	eastl::vector<TileBrush>			painter;
 
 	static inline int			cell2int(int x,int y){
 		return (y << 8) | x;
 	}
 	void save();
 	void load();
+	//void visit(Pasta::JReflect& jr);
 };
+
 
 class Game : rd::Agent {
 public:
@@ -66,3 +78,4 @@ public:
 	void			loadMap();
 	void			dressMap();
 };
+

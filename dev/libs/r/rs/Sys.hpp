@@ -34,7 +34,7 @@ namespace rs{
 
 		static void						event(InputEvent & ev);
 
-		static bool						isMousePressed	;
+		static bool						isMousePressed;
 		static bool						hasInputKeyThisFrame;
 
 		static int						mousePressedMask;

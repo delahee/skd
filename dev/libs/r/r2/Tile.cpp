@@ -199,8 +199,9 @@ Tile* r2::Tile::fromColor(const r::Color & c) {
 	auto ctx = Pasta::GraphicContext::GetCurrent();
 	auto loader = Pasta::TextureLoader::getSingleton();
 	int texData[16] = {};
-	for (int i = 0; i < 16; ++i)
-		texData[i] = c.toInt();
+	for (int i = 0; i < 16; ++i) {
+		texData[i] = c.toIntRGBA();
+	}
 	Pasta::Texture* tex= ctx->CreateTexture(loader->loadRaw(texData, 4, 4));
 	auto t = new r2::Tile(tex);
 	t->setPos(2, 2);
