@@ -24,5 +24,5 @@ public:
 	void			onResize(const r::Vector2i& sz);
 	void			testGame();
 
-	PixelScene *	mainScene = nullptr;
+	r2::Scene *		mainScene = nullptr;
 };

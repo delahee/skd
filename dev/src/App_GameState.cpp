@@ -5,91 +5,45 @@
 #include "GAMEApplication.h"
 #include "r2/im/HierarchyExplorer.hpp"
 #include "Cine.hpp"
+#include "Data.hpp"
+#include "Game.hpp"
 
 App_GameState* App_GameState::me = 0;
 
-static void testCine() {
-	auto app = App_GameState::me;
-	auto sc = app->mainScene;
-	auto cc = new CineController(&sc->al);
-
-	cc->add([]() {
-		trace("a");
-	});
-
-	cc->add([]() {
-		trace("b");
-	});
-
-	class CustomCineStep : public CineStep{
-		virtual void update(double dt) override {
-			trace("c");
-			finished = true;
-		};
-	};	
-	cc->add( new CustomCineStep());
-	cc->add([]() {
-		trace("d");
-	});
-	//cc->steps.add(new WaitForMessage(""));//cc->waitForMessage();
-	//cc->add(new WaitForNamedTypewriter("Cine1_step2",2.0f));//cc->waitForSeconds();
-	//cc->add(new WaitForAnyInput());//cc->waitForAnyInput();
-	//cc->add(new WaitForVariable("SPOT_REACHED"));//cc->waitForVariable();
-	cc->add(new WaitForSeconds(5.0f));//cc->waitForSeconds();
-	cc->add([]() {
-		trace("e");
-		trace("press space to continue");
-	});
-	cc->add(new WaitForKeyInput(Pasta::Key::KB_SPACE));//cc->waitForInput();
-	cc->add([]() {
-		trace("f");
-	});
-	cc->add([=]() {
-		rs::Timer::delay(1000,[=]() {
-			cc->msg("nope");
-		});
-	});
-	cc->add([=]() {
-		rs::Timer::delay(3000, [=]() {
-			cc->msg("My message !");
-		});
-	});
-	cc->add(new WaitForMessage("My message !"));//cc->waitForMessage();
-	cc->add([]() {
-		trace("g");
-	});
-	cc->start();
-}
+static void updateTools();
 
 static void bootGame() {
 	auto app = App_GameState::me;
 	auto sc = app->mainScene;
 
-	auto t = ri18n::RichText::mk("This is a *funny* text", sc);
-	t->x = 300;
-	t->y = 300;
-	t->setScale(3, 3);
-
-	testCine();
+	new Game(sc,&sc->al);
+	new AnonAgent( updateTools, &sc->al);
+	r2::im::HierarchyExplorer::toggle(App_GameState::me->mainScene);
 }
 
-
-static void updateGame(double dt){
-	auto app = App_GameState::me;
-	auto sc = app->mainScene;
-
-	if( Input::isKeyboardKeyJustReleased(Pasta::Key::KB_F1 )){
+void updateTools(){
+	if (Input::isKeyboardKeyJustReleased(Pasta::Key::KB_F1)) {
 		r2::im::HierarchyExplorer::toggle(App_GameState::me->mainScene);
 	}
-	
+
 }
 
 void App_GameState::testGame(){
 	if(mainScene == nullptr){
-		mainScene = new PixelScene();
+		//mainScene = new PixelScene(Cst::W,Cst::H);
+		mainScene = new r2::Scene();
+		float s = (int)rs::Display::height() / Cst::H;
+		mainScene->setZoom(s, s);
+
+		int scx = s * Cst::W;
+		int scy = s * Cst::H;
+
+		int remSX = (rs::Display::width() / s - Cst::W) * 0.5f;
+		int remSY = (rs::Display::height() / s - Cst::H) * 0.5f;
+
+		mainScene->setPan( -remSX, -remSY);
 		bootGame();
 	}
-	new AnonAgent([](double dt) { updateGame(dt); }, &mainScene->al);
 }
 
 void App_GameState::onResize(const r::Vector2i& sz) {
@@ -97,9 +51,8 @@ void App_GameState::onResize(const r::Vector2i& sz) {
 		mainScene->onResize(sz);
 }
 
-
 App_GameState::~App_GameState() {
-	
+	int here = 0;
 }
 
 App_GameState::App_GameState() {
@@ -122,6 +75,8 @@ App_GameState::App_GameState() {
 		
 		return;
 	}
+
+	
 
 	testGame();
 }
@@ -147,7 +102,11 @@ int App_GameState::executeGameState(Pasta::Duration deltaTime) {
 
 
 void App_GameState::release() {
-	if (mainScene) mainScene->destroy(); mainScene = nullptr;
+	
+	if (mainScene) {
+		mainScene->al.deleteAllChildren();
+		mainScene->destroy(); mainScene = nullptr;
+	}
 	r2::Lib::dispose();
 	rs::Sys::dispose();
 }

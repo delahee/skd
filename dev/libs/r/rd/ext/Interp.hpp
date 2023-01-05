@@ -90,9 +90,10 @@ namespace rd {
 		public:
 			eastl::vector<Vector2> data;
 
-			CurveC2() {};
+					CurveC2() {};
 			Vector2	plot(float t);
 
+			int		size()const { return data.size(); };
 			void	load(const char* folder, const char* file);
 			void	save(const char* folder, const char* file);
 			bool	im();

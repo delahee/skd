@@ -86,6 +86,8 @@ namespace r2 {
 		static Tile*			fromPool(Pasta::Texture* tex, int rectX = 0, int rectY = 0, int w = -1, int h = -1, int dx = 0, int dy = 0);
 		static Tile*			fromWhite();
 		static Tile*			fromImageFile(const std::string& path, r2::TexFilter filter = r2::TexFilter::TF_NEAREST);
+
+		static Tile*			fromColor(const r::Color & col);
 		//does not acquire autority to release texture data
 		static Tile*			fromTexture(Pasta::Texture* tex);
 		//does not acquire autority to release texture data

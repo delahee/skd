@@ -195,6 +195,19 @@ Tile * Tile::fromImageFile(const std::string & path, r2::TexFilter filter ){
 	return t;
 }
 
+Tile* r2::Tile::fromColor(const r::Color & c) {
+	auto ctx = Pasta::GraphicContext::GetCurrent();
+	auto loader = Pasta::TextureLoader::getSingleton();
+	int texData[16] = {};
+	for (int i = 0; i < 16; ++i)
+		texData[i] = c.toInt();
+	Pasta::Texture* tex= ctx->CreateTexture(loader->loadRaw(texData, 4, 4));
+	auto t = new r2::Tile(tex);
+	t->setPos(2, 2);
+	t->setSize(1, 1);
+	return t;
+}
+
 Tile * Tile::fromTexture(Pasta::Texture*tex){
 	if (!tex) return nullptr;
 	Tile * t = fromPool(tex, 0, 0, tex->getWidth(), tex->getHeight());

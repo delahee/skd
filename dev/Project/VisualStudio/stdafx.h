@@ -36,5 +36,8 @@ using namespace ri18n;
 
 #include "UserDefines.hpp"
 
+#include "Cst.hpp"
+#include "Data.hpp"
+
 
 
