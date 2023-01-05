@@ -1,34 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Created with TexturePacker https://www.codeandweb.com/texturepacker -->
-<!-- $TexturePacker:SmartUpdate:340ace92510452a67061b3e4a0d38105:20431d033adaaf6daae6f52042874b8a:57ef0b4f36012e2dacefebfa7d58e2d4$ -->
-<TextureAtlas imagePath="assets.png" width="707" height="128">
+<!-- $TexturePacker:SmartUpdate:631f3ecf5c079b2a646d720ed5d27f4c:79d67815652107bafeba616c5b3a9167:57ef0b4f36012e2dacefebfa7d58e2d4$ -->
+<TextureAtlas imagePath="assets.png" width="711" height="128">
+    <SubTexture name="car1" x="562" y="113" width="12" height="8" frameX="0" frameY="-4" frameWidth="12" frameHeight="12"/>
+    <SubTexture name="car2" x="576" y="113" width="12" height="8" frameX="0" frameY="-4" frameWidth="12" frameHeight="12"/>
+    <SubTexture name="car3" x="489" y="120" width="12" height="7" frameX="0" frameY="-5" frameWidth="12" frameHeight="12"/>
+    <SubTexture name="car4" x="590" y="113" width="12" height="8" frameX="0" frameY="-4" frameWidth="12" frameHeight="12"/>
+    <SubTexture name="car5" x="604" y="113" width="12" height="8" frameX="0" frameY="-4" frameWidth="12" frameHeight="12"/>
     <SubTexture name="cloud" x="300" y="1" width="90" height="90" frameX="-19" frameY="-21" frameWidth="128" frameHeight="128"/>
+    <SubTexture name="cup" x="459" y="91" width="28" height="29" frameX="-3" frameY="-3" frameWidth="32" frameHeight="32"/>
+    <SubTexture name="cup_nooutline" x="489" y="91" width="26" height="27" frameX="-4" frameY="-4" frameWidth="32" frameHeight="32"/>
     <SubTexture name="factory" x="392" y="1" width="104" height="82" frameX="-5" frameY="-29" frameWidth="128" frameHeight="128"/>
     <SubTexture name="gradient_linear" x="392" y="85" width="256" height="4"/>
-    <SubTexture name="hammer" x="459" y="113" width="15" height="12" frameX="-1" frameY="-3" frameWidth="17" frameHeight="17"/>
-    <SubTexture name="kiwi1" x="605" y="91" width="16" height="19" frameX="-8" frameY="-10" frameWidth="32" frameHeight="32"/>
-    <SubTexture name="kiwi2" x="605" y="91" width="16" height="19" frameX="-8" frameY="-10" frameWidth="32" frameHeight="32"/>
-    <SubTexture name="kiwi3" x="605" y="91" width="16" height="19" frameX="-8" frameY="-10" frameWidth="32" frameHeight="32"/>
-    <SubTexture name="kiwi4" x="623" y="91" width="15" height="18" frameX="-8" frameY="-11" frameWidth="32" frameHeight="32"/>
-    <SubTexture name="kiwi5" x="623" y="91" width="15" height="18" frameX="-8" frameY="-11" frameWidth="32" frameHeight="32"/>
-    <SubTexture name="kiwi6" x="623" y="91" width="15" height="18" frameX="-8" frameY="-11" frameWidth="32" frameHeight="32"/>
-    <SubTexture name="kiwi_head" x="476" y="113" width="15" height="11" frameX="0" frameY="0" frameWidth="16" frameHeight="11"/>
-    <SubTexture name="lone_9" x="493" y="113" width="9" height="9"/>
-    <SubTexture name="lone_16" x="623" y="111" width="16" height="16"/>
-    <SubTexture name="lone_16s" x="640" y="91" width="16" height="16"/>
+    <SubTexture name="hammer" x="517" y="113" width="15" height="12" frameX="-1" frameY="-3" frameWidth="17" frameHeight="17"/>
+    <SubTexture name="kiwi1" x="580" y="64" width="16" height="19" frameX="-8" frameY="-10" frameWidth="32" frameHeight="32"/>
+    <SubTexture name="kiwi2" x="580" y="64" width="16" height="19" frameX="-8" frameY="-10" frameWidth="32" frameHeight="32"/>
+    <SubTexture name="kiwi3" x="580" y="64" width="16" height="19" frameX="-8" frameY="-10" frameWidth="32" frameHeight="32"/>
+    <SubTexture name="kiwi4" x="598" y="64" width="15" height="18" frameX="-8" frameY="-11" frameWidth="32" frameHeight="32"/>
+    <SubTexture name="kiwi5" x="598" y="64" width="15" height="18" frameX="-8" frameY="-11" frameWidth="32" frameHeight="32"/>
+    <SubTexture name="kiwi6" x="598" y="64" width="15" height="18" frameX="-8" frameY="-11" frameWidth="32" frameHeight="32"/>
+    <SubTexture name="kiwi_head" x="534" y="113" width="15" height="11" frameX="0" frameY="0" frameWidth="16" frameHeight="11"/>
+    <SubTexture name="lone_9" x="551" y="113" width="9" height="9"/>
+    <SubTexture name="lone_16" x="615" y="64" width="16" height="16"/>
+    <SubTexture name="lone_16s" x="633" y="64" width="16" height="16"/>
     <SubTexture name="partBloodA" x="1" y="103" width="21" height="23" frameX="-2" frameY="-1" frameWidth="25" frameHeight="25"/>
     <SubTexture name="partCircle" x="224" y="95" width="32" height="32"/>
     <SubTexture name="partCircleB" x="258" y="95" width="32" height="32"/>
     <SubTexture name="partCircleContrast" x="292" y="95" width="32" height="32"/>
-    <SubTexture name="partCircleSmall" x="641" y="109" width="16" height="16"/>
+    <SubTexture name="partCircleSmall" x="651" y="58" width="16" height="16"/>
     <SubTexture name="partDisc1" x="643" y="1" width="55" height="55" frameX="-5" frameY="-6" frameWidth="64" frameHeight="64"/>
     <SubTexture name="partDisc2" x="580" y="1" width="61" height="61" frameX="-2" frameY="-3" frameWidth="64" frameHeight="64"/>
-    <SubTexture name="partGlow" x="580" y="64" width="16" height="16"/>
+    <SubTexture name="partGlow" x="669" y="58" width="16" height="16"/>
     <SubTexture name="partSmoke" x="498" y="1" width="80" height="80"/>
     <SubTexture name="partSmokeA" x="204" y="1" width="94" height="92" frameX="-3" frameY="-5" frameWidth="100" frameHeight="100"/>
     <SubTexture name="partSmokeB" x="1" y="1" width="100" height="100"/>
     <SubTexture name="partSmokeC" x="103" y="1" width="99" height="99" frameX="0" frameY="-1" frameWidth="100" frameHeight="100"/>
-    <SubTexture name="partSmokeSmallA" x="659" y="58" width="47" height="50" frameX="-3" frameY="0" frameWidth="50" frameHeight="50"/>
+    <SubTexture name="partSmokeSmallA" x="663" y="76" width="47" height="50" frameX="-3" frameY="0" frameWidth="50" frameHeight="50"/>
     <SubTexture name="partSphere" x="326" y="93" width="32" height="32"/>
     <SubTexture name="partSplatterA" x="360" y="93" width="32" height="32"/>
     <SubTexture name="partSplatterB" x="394" y="91" width="32" height="31" frameX="0" frameY="-1" frameWidth="32" frameHeight="32"/>
@@ -42,16 +49,16 @@
     <SubTexture name="ui_xbox_down" x="68" y="103" width="20" height="20"/>
     <SubTexture name="ui_xbox_dright" x="180" y="102" width="20" height="20"/>
     <SubTexture name="ui_xbox_dup" x="202" y="102" width="20" height="20"/>
-    <SubTexture name="ui_xbox_lb" x="547" y="91" width="27" height="19"/>
+    <SubTexture name="ui_xbox_lb" x="605" y="91" width="27" height="19"/>
     <SubTexture name="ui_xbox_left" x="90" y="103" width="20" height="20"/>
     <SubTexture name="ui_xbox_lt" x="112" y="102" width="32" height="25"/>
-    <SubTexture name="ui_xbox_rb" x="576" y="91" width="27" height="19"/>
+    <SubTexture name="ui_xbox_rb" x="634" y="91" width="27" height="19"/>
     <SubTexture name="ui_xbox_right" x="180" y="102" width="20" height="20"/>
     <SubTexture name="ui_xbox_rt" x="146" y="102" width="32" height="25"/>
-    <SubTexture name="ui_xbox_share" x="459" y="91" width="20" height="20"/>
-    <SubTexture name="ui_xbox_start" x="481" y="91" width="20" height="20"/>
+    <SubTexture name="ui_xbox_share" x="517" y="91" width="20" height="20"/>
+    <SubTexture name="ui_xbox_start" x="539" y="91" width="20" height="20"/>
     <SubTexture name="ui_xbox_up" x="202" y="102" width="20" height="20"/>
-    <SubTexture name="ui_xbox_x" x="503" y="91" width="20" height="20"/>
+    <SubTexture name="ui_xbox_x" x="561" y="91" width="20" height="20"/>
     <SubTexture name="ui_xbox_xbox" x="428" y="91" width="29" height="29" frameX="-1" frameY="-1" frameWidth="30" frameHeight="30"/>
-    <SubTexture name="ui_xbox_y" x="525" y="91" width="20" height="20"/>
+    <SubTexture name="ui_xbox_y" x="583" y="91" width="20" height="20"/>
 </TextureAtlas>

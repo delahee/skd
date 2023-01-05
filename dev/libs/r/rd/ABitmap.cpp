@@ -230,7 +230,7 @@ Tile * ABitmap::syncTile() {
 rd::ABitmap* rd::ABitmap::fromPool(TileLib* l, const char* str, r2::Node* parent){
 	auto a = rd::Pools::abitmaps.alloc();
 	a->set(l);
-	a->play(str);
+	a->playAndLoop(str);
 	if(parent) parent->addChild(a);
 	return a;
 }

@@ -1,31 +1,11 @@
 #pragma once
 #include "rd/Agent.hpp"
 #include "rd/ext/Interp.hpp"
-
+#include "UserTypes.hpp"
 class Game;
 
 namespace r2 { class Node; }
 namespace rui { class Canvas; }
-
-
-struct Path : rd::Agent {
-	Game* g = 0;
-
-	typedef rd::Agent Super;
-	Path(rd::AgentList* al) : Super(al) {
-
-	};
-
-	r2::Bitmap*				cursor = 0;
-	float					progress = 0;
-
-	rd::ext::CurveC2		data;
-
-	void add(const r::Vector2& p) { data.data.push_back(p); };
-	void update(double dt);
-	void reflectProgress(r2::Bitmap* c, float p);
-	void debugDraw();
-};
 
 struct TileBrush {
 	std::string	name;
@@ -39,7 +19,6 @@ enum class PaintMode : int {
 	Tower,
 	None = -1
 };
-
 
 struct Tool{
 	bool								allowTilePaint = true;
@@ -61,6 +40,11 @@ struct Tool{
 	//void visit(Pasta::JReflect& jr);
 };
 
+
+struct Wave{
+	int nbMonster = 3;
+	float timer = 0;
+};
 
 class Game : rd::Agent {
 public:
@@ -87,6 +71,7 @@ public:
 					Game(r2::Scene* sc, rd::AgentList* parent);
 	virtual void	update(double dt);
 
+	void			spawn(Str& sp);
 	void			im();
 
 	void			loadMap();

@@ -1,14 +1,19 @@
 #include "stdafx.h"
 
+#include <unordered_map>
+
 #include "r2/Node.hpp"
 #include "rui/Canvas.hpp"
-
 #include "r2/StaticBox.hpp"
 
 #include "Game.hpp"
 #include "rd/JSerialize.hpp"
 #include <EASTL/variant.h>
 #include "rd/Garbage.hpp"
+#include "Entity.hpp"
+
+static std::unordered_map<Str, EntityData*> edata;
+
 
 void Game::defeat(){
 	auto sc = root->getScene();
@@ -109,15 +114,19 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	livesFlow->horizontalSpacing = 10;
 	livesFlow->reflow();
 
+	auto carData = new EntityData();
+	carData->name = "car";
+	carData->family = "vehicle";
+	carData->speed = 0.1f;
+	edata["car"] = carData;
 	// put up with one enemy
-	//add lives
+	
 	//add wave
 	//add turret points
 	//add three turrets
 	//add three turret upgrades
 	//add particles
 	//add cinematics
-	//add graphics
 	//finished !
 }
 
@@ -179,6 +188,14 @@ void Tool::load() {
 	rs::jDeserialize(*this, "editor", "map.json", "all");
 }
 
+
+void Game::spawn(Str& sp) {
+	auto e = new Entity(this, cells);
+	EntityData* data = edata[sp];
+	e->init(data);
+	e->path = path;
+}
+
 void Game::im(){
 	static bool wasMousePressed = false;
 
@@ -191,12 +208,28 @@ void Game::im(){
 	Value("dt", rs::Timer::dt);
 	Value("fps", std::lrint(1.0f / rs::Timer::dt));
 
-
-	if(TreeNodeEx("action",1)){
+	if(TreeNodeEx("action",ImGuiTreeNodeFlags_DefaultOpen)){
 		if (Button("defeat"))
 			defeat();
 		if (Button("victory"))
 			victory();
+
+		if (Button("spawn monster")) {
+			spawn(StrRef("car"));
+		}
+		TreePop();
+	}
+
+	if (TreeNodeEx("entities", ImGuiTreeNodeFlags_DefaultOpen)) {
+		for(auto e : cells->children){
+			auto asEnt = dynamic_cast<Entity*>(e);
+			if (!asEnt) continue;;
+
+			if (TreeNode(asEnt->name.c_str())) {
+				asEnt->im();
+				TreePop();
+			}
+		}
 		TreePop();
 	}
 
@@ -377,12 +410,12 @@ void Game::dressMap(){
 	}
 
 	for (auto b : cells->children) 
-		if( b->vars.getStr("gpType") == "tower")
+		if( b->vars.getStr("gpType") == "towerSpot")
 			rd::Garbage::trash(b);
 	
 	for (auto &sp : tool.towerSpot) {
 		auto b = rd::ABitmap::mk("partCircle", Data::assets, cells);
-		b->vars.set("gpType","tower");
+		b->vars.set("gpType","towerSpot");
 		b->setCenterRatio(0.5, 0.5);
 		b->setSize(Cst::GRID, Cst::GRID);
 		b->x = (int)sp.x;
