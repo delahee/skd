@@ -119,14 +119,20 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	carData->family = "vehicle";
 	carData->speed = 0.1f;
 	edata["car"] = carData;
-	// put up with one enemy
-	
-	//add wave
-	//add turret points
+
+
+	//TODO
+	//add one turret
+	//add wave definition
+	//add title screen
+	//add credits.txt
+	//add sound
+	//add cinematics
+	//add two more ennemies
 	//add three turrets
 	//add three turret upgrades
 	//add particles
-	//add cinematics
+	
 	//finished !
 }
 
