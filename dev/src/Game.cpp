@@ -69,16 +69,27 @@ void Game::intro(){
 	e->x = w * 0.5f;
 	e->y = h * 0.66f;
 	e->setScale(2, 2);
+
+	static bool exiting = false;
 	e->bhv = [=](auto) {
 		e->alpha = 1.0f * ((rs::Timer::frameCount % 16) <= 8);
-		if( rs::Sys::isMousePressed){
+		if( !exiting&&rs::Sys::isMousePressed){
+			beginGame();
 			auto p = tw.create(n, VAlpha, 0, TType::TBurnIn, 600);
 			p->onEnd = [=](auto) {
 				n->destroy();
 			};
+			exiting = true;
 		}
 	};
 
+}
+
+void Game::beginGame(){
+	auto defy = bossPortrait->y;
+	bossPortrait->y += 25;
+	tw.create(bossPortrait, VY, defy, TType::TEaseOut, 500);
+	bossPortrait->replay(10);
 }
 
 void Game::victory() {
@@ -123,9 +134,10 @@ Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent
 	board->name = "board";
 	board->y += 15;
 
+#if 0
 	auto b = new r2::Bitmap(r2::Tile::fromWhite(), board);
 	b->setSize(Cst::W, Cst::H);
-
+#endif
 	r2::Graphics* grid = new r2::Graphics(board);//create layers
 	bg = new r2::Batch(board);
 	bg->name = "bg";
@@ -143,13 +155,14 @@ Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent
 	}
 	loadMap();
 
+#if 0
 	for (int y = 0; y < Cst::GRID_H + 1; ++y)
 		for (int x = 0; x < Cst::GRID_W + 1; ++x) {
 			grid->drawLine(Vector2(x * Cst::GRID, 0), Vector2(x * Cst::GRID, Cst::H), 1);
 			grid->drawLine(Vector2(0, y * Cst::GRID), Vector2(Cst::W, y * Cst::GRID), 1);
 		}
 	grid->color = r::Color::Orange.mulAlpha(0.5);
-
+#endif
 
 
 	bossPortrait = rd::ABitmap::fromLib(Data::assets, "elon", root);
@@ -218,6 +231,9 @@ Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent
 
 	cc->add([=]() {victory(); });
 
+#ifndef PASTA_DEBUG
+	intro();
+#endif
 	//TODO
 	//add sound
 	//add two more ennemies

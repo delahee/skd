@@ -72,6 +72,7 @@ public:
 	Wave*			wave1 = 0;
 	Wave*			curWave = 0;
 	void			intro();
+	void			beginGame();
 	void			victory();
 	void			defeat();
 	void			hit();
