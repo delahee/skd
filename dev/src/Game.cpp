@@ -114,17 +114,19 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	livesFlow->horizontalSpacing = 10;
 	livesFlow->reflow();
 
+
 	{
 		auto d = new EntityData();
 		d->name = "car";
 		d->tags.push_back("vehicle");
-		d->speed = 0.01f;
+		d->tags.push_back("monster");
+		d->speed = 0.1f;
 		edata[d->name] = d;
 	}
 
 	{
 		auto d = new EntityData();
-		d->name = "bikePark";
+		d->name = "bike_park";
 		d->tags.push_back( "turret" );
 		d->speed = 0.0f;
 		d->dmg = 5;
@@ -392,7 +394,7 @@ void Game::loadMap() {
 	{
 		TileBrush tb;
 		tb.name = "grass";
-		tb.t = r2::Tile::fromColor(r::Color::AcidGreen);
+		tb.t = r2::Tile::fromColor(r::Color(0x24A03E));
 		tool.painter.push_back(tb);
 	}
 
@@ -437,17 +439,63 @@ void Game::dressMap(){
 		b->y = (int)sp.y;
 
 		auto c = rd::ABitmap::mk("partCircle", Data::assets, b);
+		c->name = "foundation";
 		c->setCenterRatio(0.5, 0.5);
 		float s = 1.4;
 		c->setSize(s*Cst::GRID, s*Cst::GRID / 1.414f);
 		c->color = r::Color(0xeec39a);
 
-		auto h =rd::ABitmap::mk("hammer", Data::assets, b);
+		auto h = rd::ABitmap::mk("hammer", Data::assets, b);
+		h->name = "hammer";
 		h->setCenterRatio();
 		h->bhv = [=](auto) {
 			int ofs = 7;
 			h->y = (int)(-ofs +  sin(h->uid + rs::Timer::now * 4) * 3);
 		};
+		r2::Interact* it = new r2::Interact(b);
+		it->x = -8;
+		it->y = -16;
+		it->rectWidth = h->width();
+		it->rectHeight = 25;
+		it->name = "it";
+
+		//todo r2::Graphics::circle( elem );
+		it->onMouseOvers.push_back([=](auto & ev) {
+			if( !b->findByName("sel")){
+				auto c = r2::Graphics::fromPool(b);
+				c->name = "sel";
+				c->setGeomColor(r::Color::Red);
+				c->drawCircle(0, 0, 12, 2);
+				c->toBack();
+			}
+		});
+
+		it->onMouseButtonDowns.push_back([=](auto&ev) {
+			if( b->vars.getStr("gpType") == "towerSpot"){
+				b->vars.set("gpType", "tower");
+
+				//delete old
+				rd::ABitmap* ab = (rd::ABitmap *) h->findByName("hammer");
+				rd::Garbage::trash(ab);
+
+				//turn in tower
+				//auto h = rd::ABitmap::mk("bikePark", Data::assets, b);
+				//h->name = "bikePark";
+				//h->setCenterRatio();
+				auto e = new Entity(this, b);
+				e->init(edata["bike_park"]);
+				e->spr->setCenterRatio();
+
+				//
+				auto sel = b->findByName("sel");
+				if (sel) rd::Garbage::trash(sel);
+			}
+		});
+
+		it->onMouseOuts.push_back([=](auto& ev) {
+			auto sel = b->findByName("sel");
+			if (sel) rd::Garbage::trash(sel);
+		});
 	}
 }
 

@@ -4,6 +4,9 @@
 #include "Entity.hpp"
 #include "UserTypes.hpp"
 #include "rd/Garbage.hpp"
+#include "r2/fx/Part.hpp"
+
+std::vector<Entity*> Entity::ALL;
 
 void Entity::init(EntityData * _data) {
 	data = _data;
@@ -14,19 +17,25 @@ void Entity::init(EntityData * _data) {
 	else 
 		vars.set("gpType", "monster");
 	name = data->name + std::to_string(uid);
-
+	if (!spr->player.isReady())
+		int here = 0;
 }
 
 Entity::Entity(Game*g,r2::Node* parent) : r2::Node(parent){
 	game = g;
-	
+	ALL.push_back(this);
+}
+
+Entity::~Entity() {
+	rs::Std::remove(ALL,this);
+	dispose();
 }
 
 void Entity::im(){
 	using namespace ImGui;
 	if (TreeNode("data")) {
 		Value("name", data->name);
-		DragFloat("speed", &data->speed,0.001,0,10);
+		DragFloat("speed", &data->speed,0.001f,0,10);
 		Value("hp", data->hp);
 		Value("good", data->good);
 		TreePop();
@@ -62,14 +71,26 @@ void Entity::update(double dt) {
 	}
 	else {
 		rx += dt * dx;
-		ry += dt * dy;
+		while (rx > 1) { cx++; rx--; }
+		while (rx < 0) { cx--; rx++; }
 
-		//no coll so far ?
+		ry += dt * dy;
+		while (ry > 1) { cy++; ry--; }
+		while (ry < 0) { cy--; ry++; }
 	}
 
 	bool fl = (prevPos - getPixelPos()).x < 0;
 	spr->setFlippedX(fl);
 	prevPos = getPixelPos();
+
+	for(auto e : ALL){
+		if (e != this && e->data->isMonster()) {
+			Vector2 from = getPos();
+			Vector2 to = e->getPos();
+			if ((to-from).getNormSquared() < (data->range * data->range))
+				fire(e);
+		}
+	}
 
 	syncPos();
 }
@@ -79,6 +100,22 @@ Vector2 Entity::getPixelPos(){
 }
 
 void Entity::syncPos(){
-	spr->x = std::lrint((cx + rx) * Cst::GRID);
-	spr->y = std::lrint((cy + ry) * Cst::GRID);
+	x = std::lrint((cx + rx) * Cst::GRID);
+	y = std::lrint((cy + ry) * Cst::GRID);
+}
+
+void Entity::fire(Entity*opp) {
+	int here = 0;
+	
+	auto proj = rd::ABitmap::fromLib(Data::assets, "bike", game->cells);
+	proj->vars.set("gpType", "proj");
+	new r2::fx::Part(proj,&game->al);
+}
+
+bool EntityData::isMonster() {
+	for(auto &s :tags){
+		if (s == "monster")
+			return true;
+	}
+	return false;
 }

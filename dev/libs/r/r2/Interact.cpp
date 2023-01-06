@@ -288,8 +288,11 @@ void r2::Interact::im(){
 
 void r2::Interact::fitToParent(){
 	if (!parent) return;
+	parent->syncAllMatrix();
 	auto sz = parent->getSize();
 	auto bnd = parent->getMyLocalBounds();
+	if (bnd.isEmpty())
+		bnd.zero();
 	x = bnd.left() - parent->x;
 	y = bnd.top() - parent->y;
 	rectWidth = sz.x;

@@ -5,13 +5,16 @@
 struct EntityData{
 	std::string					name;
 	std::string					attack;
-	std::vector<std::string>	tags;
+	std::vector<Str>			tags;
 
 	bool						good = false;
-	float						speed = 0.1;
+	float						speed = 0.1f;
 	int							hp = 10;
 	int							maxUpgrade = 0;
 	int							dmg = 1;
+	int							range = 30;
+
+	bool						isMonster();
 };
 
 class Entity : public r2::Node {
@@ -34,17 +37,23 @@ public:
 
 	int				upgrade = 0;
 
-	Vector2	prevPos;
+	Vector2			prevPos;
 
 	enum class State : int {
 		Running,
 	};
 
-	void init(EntityData*data);
-
 					Entity(Game*g,r2::Node* parent);
-					void im();
+					virtual			~Entity();
+
+	void			init(EntityData* data);
+
+	void			im();
 	virtual void	update(double dt);
 	Vector2			getPixelPos();
 	void			syncPos();
+
+	void			fire(Entity*opp);
+
+	static std::vector<Entity*>	ALL;
 };

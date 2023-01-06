@@ -268,6 +268,7 @@ void r2::Node::reset() {
 	onDestruction.clear();
 	if(sigOnResize) sigOnResize->clear();
 	trsDirty = true;
+	bhv = {};
 };
 
 TRS r2::Node::getTRS() {
