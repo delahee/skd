@@ -171,6 +171,10 @@ void Entity::fire(Entity*opp) {
 	auto& rand = rd::Rand::get();
 	if (cooldown > 0)
 		return;
+
+	if (game->curWave && game->curWave->stopped)
+		return;
+
 	int here = 0;
 	
 	auto proj = rd::ABitmap::fromLib(Data::assets, data->attack.c_str(), game->cells);
@@ -180,6 +184,8 @@ void Entity::fire(Entity*opp) {
 	proj->x = x;
 	proj->y = y;	
 	proj->rotation = rand.angle();
+
+	game->sfx("snd/bikeShoot.wav");
 
 	auto p = new r2::fx::Part(proj,&game->al);
 	p->dy = -0.01f;

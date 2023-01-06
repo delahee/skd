@@ -45,6 +45,7 @@ struct Tool{
 struct Wave{
 	Game* g=0;
 	rgp::CineController * cc=0;
+	bool stopped = false;
 	void stop();
 };
 
@@ -72,6 +73,7 @@ public:
 	Wave*			wave1 = 0;
 	Wave*			curWave = 0;
 	void			intro();
+	void			sfx(const char* name);
 	void			beginGame();
 	void			victory();
 	void			defeat();

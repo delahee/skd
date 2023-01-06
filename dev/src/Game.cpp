@@ -23,26 +23,45 @@ void Game::onFrag(){
 		auto s = rd::ABitmap::mk("kiwifruit", Data::assets, fragFlow);
 		s->setCenterRatio(0.5, 1);
 		FX::blink(s);
+		sfx("snd/kiwi_up.wav");
 	}
 }
 
 void Wave::stop() {
-	cc->pause();
+	if(cc)
+		cc->pause();
+	stopped = true;
 }
 
 void Game::defeat(){
+
+	cells->visible = false;
+
 	auto sc = root->getScene();
-	auto n = new r2::Node(sc);
-	n->x = sc->getPanX();
-	n->y = sc->getPanY();
+	auto stage = sc->findByName("stage");
+	auto w = rs::Display::width() / sc->getZoomX();
+	auto h = rs::Display::height() / sc->getZoomY();
+	auto n = new r2::Node(stage);
 	auto r = r2::Bitmap::fromColor(r::Color::Red, n);
 	r->setSize(rs::Display::width(),rs::Display::height());
 	auto txt = new r2::Text(nullptr,"DEFEAT!", n);
 	txt->setBlockAlign(r2::Text::ALIGN_CENTER);
-	txt->x = 280;
-	txt->y = 150;
+	txt->setTextColor(r::Color::Black);
+	txt->addOutline(KIWI);
+	txt->x = w*0.5;
+	txt->y = h * 0.5;	
 	txt->scaleX = txt->scaleY = sc->getZoomY();
-	curWave->stop();
+	if(curWave)curWave->stop();
+	sfx("snd/loose.wav");
+	rs::Timer::delay(1000, [=]() { sfx("snd/laugh.wav"); });
+
+	auto bp = rd::ABitmap::fromLib(Data::assets, "elon", n);
+	bp->setScale(2,2);
+	bp->setCenterRatio(0.5, 1);
+	bp->x = w*0.5;
+	bp->y = h+40;
+	tw.create(bp,VY, h+10,TType::TEaseIn);
+
 }
 
 void Game::intro(){
@@ -70,10 +89,15 @@ void Game::intro(){
 	e->y = h * 0.66f;
 	e->setScale(2, 2);
 
+	cells->visible = false;
+
 	static bool exiting = false;
 	e->bhv = [=](auto) {
 		e->alpha = 1.0f * ((rs::Timer::frameCount % 16) <= 8);
 		if( !exiting&&rs::Sys::isMousePressed){
+			cells->visible = true;
+
+			sfx("snd/intro.wav");
 			beginGame();
 			auto p = tw.create(n, VAlpha, 0, TType::TBurnIn, 600);
 			p->onEnd = [=](auto) {
@@ -85,6 +109,10 @@ void Game::intro(){
 
 }
 
+void Game::sfx(const char * name){
+	rd::AudioMan::get().playFile(name);
+}
+
 void Game::beginGame(){
 	auto defy = bossPortrait->y;
 	bossPortrait->y += 25;
@@ -93,16 +121,19 @@ void Game::beginGame(){
 }
 
 void Game::victory() {
+
+	cells->visible = false;
 	auto sc = root->getScene();
-	auto n = new r2::Node(sc);
-	n->x = sc->getPanX();
-	n->y = sc->getPanY();
+	auto stage = sc->findByName("stage");
+	auto w = rs::Display::width() / sc->getZoomX();
+	auto h = rs::Display::height() / sc->getZoomY();
+	auto n = new r2::Node(stage);
 	auto r = r2::Bitmap::fromColor(r::Color::Green, n);
 	r->setSize(rs::Display::width(), rs::Display::height());
 	auto txt = new r2::Text(nullptr, "VICTORY!", n);
 	txt->setBlockAlign(r2::Text::ALIGN_CENTER);
-	txt->x = 280;
-	txt->y = 150;
+	txt->x = w*0.5f;
+	txt->y = h*0.5f;
 	txt->z = -10;
 	txt->scaleX = txt->scaleY = sc->getZoomY();
 	txt->addOutline(r::Color(0x663931));
@@ -112,22 +143,34 @@ void Game::victory() {
 	c->x = txt->x;
 	c->setScale(2, 2);
 	tw.create(c, VY, c->y - 10,TType::TEaseOut,-1);
+	if (curWave)
+		curWave->stop();
+
+	double del = 800;
+	sfx("snd/vict.wav"); 
+	rs::Timer::delay(del, [=]() { sfx("snd/vict.wav"); });
+	rs::Timer::delay(del*2, [=]() { sfx("snd/vict.wav"); });
+	rs::Timer::delay(del*3, [=]() { sfx("snd/vict.wav"); });
 }
 
 void Game::hit() {
-	if( 0 == livesFlow->nbChildren()){
+	sfx("snd/hitplayer.wav");
+	if( 0 == livesFlow->nbChildren())
 		defeat();
-	}
 	else {
 		livesFlow->children[0]->destroy();
 	}
 }
+
+
 
 Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	scRoot = _root;
 	root = new r2::StaticBox(r2::Bounds::fromTLWH(0, 0, Cst::W, Cst::H), scRoot);
 
 	Data::init();
+
+	rd::AudioMan::get().init();
 
 	tool.g = this;
 	board = new r2::Graphics(root);
@@ -234,7 +277,6 @@ Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent
 #ifndef PASTA_DEBUG
 	intro();
 #endif
-	//TODO
 	//add sound
 	//add two more ennemies
 	//add three turrets
@@ -587,6 +629,7 @@ void Game::dressMap(){
 				c->setGeomColor(r::Color::Red);
 				c->drawCircle(0, 0, 12, 2);
 				c->toBack();
+				sfx("snd/hover.wav");
 			}
 		});
 
@@ -601,8 +644,11 @@ void Game::dressMap(){
 					msg->centered();
 					tw.delay(400,msg, VY, msg->y - 10);
 					tw.delay(400,msg, VAlpha, 0);
+					sfx("snd/click.wav");
+
 					return;
 				}
+
 
 				fragFlow->children[0]->destroy();
 				b->vars.set("gpType", "tower");
@@ -616,6 +662,8 @@ void Game::dressMap(){
 				e->init(Data::entities["bike_park"]);
 				e->setPixelPos(b->getPos());
 				e->spr->setCenterRatio();
+
+				sfx("snd/build.wav");
 
 				//
 				auto sel = b->findByName("sel");
