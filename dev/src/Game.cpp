@@ -46,7 +46,15 @@ void Game::victory() {
 	txt->setBlockAlign(r2::Text::ALIGN_CENTER);
 	txt->x = 280;
 	txt->y = 150;
+	txt->z = -10;
 	txt->scaleX = txt->scaleY = sc->getZoomY();
+	txt->addOutline(r::Color(0x663931));
+	auto c = rd::ABitmap::fromPool( Data::assets, "cup", n);
+	c->setCenterRatio();
+	c->y = txt->y+ 50;
+	c->x = txt->x;
+	c->setScale(2, 2);
+	tw.create(c, VY, c->y - 10,TType::TEaseOut,-1);
 }
 
 void Game::hit() {
@@ -147,6 +155,7 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 void Game::update(double dt) {
 	Super::update(dt);
 	al.update(dt);
+	tw.update(dt);
 
 	im();	
 }

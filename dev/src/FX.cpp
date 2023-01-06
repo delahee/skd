@@ -27,5 +27,5 @@ public:
 };
 void FX::blink(r2::Sprite* sp) {
 	auto sc = sp->getScene();
-	sc->al.add(new BlinkAgent( sp, 0.2f ));
+	sc->al.add(new BlinkAgent( sp, 0.5f ));
 }
