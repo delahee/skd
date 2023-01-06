@@ -45,6 +45,11 @@ static void regularBloom(PixelScene* dts, float durMs) {
 	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CR, c.r, TType::TEaseOut, durMs);
 	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CG, c.g, TType::TEaseOut, durMs);
 	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CB, c.b, TType::TEaseOut, durMs);
+
+	dts->uber.vignetteEnabled = true;
+	dts->tw.create(dts, (TVar)PixelScene::VVIGNETTE_INTENSITY, 1.07, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (TVar)PixelScene::VVIGNETTE_SMOOTHNESS, 1.270, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (TVar)PixelScene::VVIGNETTE_ROUNDNESS, 0.95, TType::TEaseOut, durMs);
 }
 
 void App_GameState::testUnit(){

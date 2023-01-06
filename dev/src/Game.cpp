@@ -114,12 +114,22 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	livesFlow->horizontalSpacing = 10;
 	livesFlow->reflow();
 
-	auto carData = new EntityData();
-	carData->name = "car";
-	carData->family = "vehicle";
-	carData->speed = 0.1f;
-	edata["car"] = carData;
+	{
+		auto d = new EntityData();
+		d->name = "car";
+		d->tags.push_back("vehicle");
+		d->speed = 0.01f;
+		edata[d->name] = d;
+	}
 
+	{
+		auto d = new EntityData();
+		d->name = "bikePark";
+		d->tags.push_back( "turret" );
+		d->speed = 0.0f;
+		d->dmg = 5;
+		edata[d->name] = d;
+	}
 
 	//TODO
 	//add one turret
@@ -147,7 +157,8 @@ template <> void Pasta::JReflect::visit(std::vector<Vector2> & v, const char* na
 	u32 arrSize = v.size()*2;
 	if (visitArrayBegin(name, arrSize)) {
 		if (isReadMode())
-			v.resize(arrSize<<1);
+			if (v.size() < arrSize >> 1)
+				v.resize(arrSize >> 1);
 		for (u32 i = 0; i < arrSize; ++i) {
 			visitIndexBegin(i);
 			Vector2& vf = v[i>>1];
@@ -420,13 +431,23 @@ void Game::dressMap(){
 			rd::Garbage::trash(b);
 	
 	for (auto &sp : tool.towerSpot) {
-		auto b = rd::ABitmap::mk("partCircle", Data::assets, cells);
-		b->vars.set("gpType","towerSpot");
-		b->setCenterRatio(0.5, 0.5);
-		b->setSize(Cst::GRID, Cst::GRID);
+		auto b = r2::Node::fromPool(cells);
+		b->vars.set("gpType", "towerSpot");
 		b->x = (int)sp.x;
 		b->y = (int)sp.y;
-		b->color = r::Color::Magenta;
+
+		auto c = rd::ABitmap::mk("partCircle", Data::assets, b);
+		c->setCenterRatio(0.5, 0.5);
+		float s = 1.4;
+		c->setSize(s*Cst::GRID, s*Cst::GRID / 1.414f);
+		c->color = r::Color(0xeec39a);
+
+		auto h =rd::ABitmap::mk("hammer", Data::assets, b);
+		h->setCenterRatio();
+		h->bhv = [=](auto) {
+			int ofs = 7;
+			h->y = (int)(-ofs +  sin(h->uid + rs::Timer::now * 4) * 3);
+		};
 	}
 }
 

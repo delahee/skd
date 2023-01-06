@@ -3,14 +3,15 @@
 #include "r2/Node.hpp"
 
 struct EntityData{
-	std::string		name;
-	std::string		attack;
-	std::string		family;
+	std::string					name;
+	std::string					attack;
+	std::vector<std::string>	tags;
 
-	bool			good = false;
-	float			speed = 1;
-	int				hp = 10;
-	int				maxUpgrade = 0;
+	bool						good = false;
+	float						speed = 0.1;
+	int							hp = 10;
+	int							maxUpgrade = 0;
+	int							dmg = 1;
 };
 
 class Entity : public r2::Node {
