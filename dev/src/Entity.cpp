@@ -10,7 +10,10 @@ std::vector<Entity*> Entity::ALL;
 
 void Entity::init(EntityData * _data) {
 	data = _data;
-	spr = rd::ABitmap::fromPool(Data::assets,data->name.c_str(),this);
+	if (spr == 0)
+		spr = rd::ABitmap::fromPool(Data::assets, data->name.c_str(), this);
+	else
+		spr->set(Data::assets, data->name.c_str());
 	spr->setCenterRatio(0.5, 1);
 	if(data->speed==0)
 		vars.set("gpType", "tower");
@@ -19,6 +22,10 @@ void Entity::init(EntityData * _data) {
 	name = data->name + std::to_string(uid);
 	if (!spr->player.isReady())
 		int here = 0;
+	hp = data->hp;
+	blinking = false;
+	fadingOut= false;
+	alpha = 1;
 }
 
 Entity::Entity(Game*g,r2::Node* parent) : r2::Node(parent){
@@ -101,6 +108,22 @@ void Entity::update(double dt) {
 	cooldown -= dt;
 
 	syncPos();
+
+	if (fadingOut) {
+		spr->alpha -= 0.01f;
+		if (spr->alpha < 0)
+			rd::Garbage::trash(this);
+	}
+
+	if(blinking>0){
+		int fr4 = rs::Timer::frameCount % 8;
+		if(fr4 <= 4){
+			spr->alpha = 1.0f - spr->alpha;
+		}
+		blinking -= dt;
+		if (blinking <= 0)
+			spr->alpha = 1;
+	}
 }
 
 void Entity::setPixelPos(const Vector2& pos) {
@@ -123,6 +146,29 @@ void Entity::syncPos(){
 	y = std::lrint((cy + ry) * Cst::GRID);
 }
 
+void Entity::hit(int dmg, EntityData* by) {
+	hp -= dmg;
+
+	bool dead = hp <= 0;
+	if (dead) {
+		if (data->isMonster()) {
+			game->onFrag();
+		}
+		if (by == nullptr) {
+			rd::Garbage::trash(this);
+		}
+		else {
+			if (by->name == "bike_park") {
+				init(Data::entities["bike"]);
+				fadingOut = true;
+			}
+		}
+	}
+	else {
+		blinking = 0.2f;
+	}
+}
+
 void Entity::fire(Entity*opp) {
 	if (cooldown > 0)
 		return;
@@ -138,11 +184,27 @@ void Entity::fire(Entity*opp) {
 	
 	Vector2 dir = opp->getPos() - getPos();
 	dir = dir.getNormalizedSafeZero();
-	float sp = 0.1f;
+	float sp = data->projSpeed;
 	p->dx = dir.x * sp;
 	p->dy = dir.y * sp;
-	p->setLife(10000);
-	cooldown = 1.0f;
+	p->setLife(35);
+	p->dr = rd::Rand::get().either( -0.1f ,0.1f);
+	p->onUpdate = [=](auto) {
+		for (auto e : Entity::ALL) {
+			if ( e->data->isMonster() ) {
+				Vector2 from = p->getPos();
+				Vector2 to = e->getPos();
+				int range = 10;
+				if ((to - from).getNorm() <= range) {
+					p->kill();
+					e->hit(data->dmg,data);
+					break;
+				}
+			}
+		}
+	};
+
+	cooldown = data->cooldown;
 }
 
 bool EntityData::isMonster() {

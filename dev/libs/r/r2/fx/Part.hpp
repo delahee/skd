@@ -60,6 +60,8 @@ namespace r2 {
 			void						syncPos();
 			float						setDelay(float d);
 
+			Vector2						getPos();
+
 		public:
 										Part(r2::Sprite* sp, rd::AgentList* al = nullptr);
 			virtual						~Part();

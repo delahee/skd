@@ -42,8 +42,13 @@ void Part::im() {
 }
 
 float Part::setDelay(float d){
-	spr->visible = d <= 0;
+	if(spr)
+		spr->visible = d <= 0;
 	return delay = d;
+}
+
+Vector2 r2::fx::Part::getPos() {
+	return Vector2(x,y);
 }
 
 float Part::setLife(float l) {
@@ -91,16 +96,18 @@ void Part::update(double dt){
 		if (onBounce) onBounce(*this);
 	}
 	
-	spr->rotation += dr * dfr;
+	if (spr) {
+		spr->rotation += dr * dfr;
 
-	float tdsx = ds + dsx;
-	float tdsy = ds + dsy;
+		float tdsx = ds + dsx;
+		float tdsy = ds + dsy;
 
-	spr->scaleX += tdsx * dfr;
-	spr->scaleY += tdsy * dfr;
+		spr->scaleX += tdsx * dfr;
+		spr->scaleY += tdsy * dfr;
 
-	spr->scaleX *= pow(scaleMul, dfr);
-	spr->scaleY *= pow(scaleMul, dfr);
+		spr->scaleX *= pow(scaleMul, dfr);
+		spr->scaleY *= pow(scaleMul, dfr);
+	}
 
 	// Fade in
 	if (rLife > 0 && da != 0) {
@@ -136,6 +143,7 @@ void Part::update(double dt){
 }
 
 void Part::syncPos() {
+	if (!spr) return;
 	spr->x = x;
 	spr->y = y;
 	spr->alpha = alpha;

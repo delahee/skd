@@ -13,8 +13,11 @@
 #include "Entity.hpp"
 #include "r2/fx/Part.hpp"
 
-static std::unordered_map<Str, EntityData*> edata;
-
+void Game::onFrag(){
+	frags++;
+	auto s = rd::ABitmap::mk("cup", Data::assets, fragFlow);
+	s->setCenterRatio(0.5, 1);
+}
 
 void Game::defeat(){
 	auto sc = root->getScene();
@@ -116,26 +119,13 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	livesFlow->horizontalSpacing = 10;
 	livesFlow->reflow();
 
+	fragFlow = new r2::Flow(root);
+	fragFlow->name = "fragFlow";
+	fragFlow->x = Cst::W ;
+	fragFlow->y = 270;
+	fragFlow->horizontalSpacing = -20;
+	fragFlow->reflow();
 
-	{
-		auto d = new EntityData();
-		d->name = "car";
-		d->tags.push_back("vehicle");
-		d->tags.push_back("monster");
-		d->speed = 0.1f;
-		edata[d->name] = d;
-	}
-
-	{
-		auto d = new EntityData();
-		d->name = "bike_park";
-		d->tags.push_back( "turret" );
-		d->attack = "bike";
-		d->speed = 0.0f;
-		d->dmg = 5;
-		d->good = true;
-		edata[d->name] = d;
-	}
 
 	//TODO
 	//add one turret
@@ -214,7 +204,7 @@ void Tool::load() {
 
 void Game::spawn(Str& sp) {
 	auto e = new Entity(this, cells);
-	EntityData* data = edata[sp];
+	EntityData* data = Data::entities[sp];
 	e->init(data);
 	e->path = path;
 }
@@ -495,7 +485,7 @@ void Game::dressMap(){
 
 				//turn in tower
 				auto e = new Entity(this, cells);
-				e->init(edata["bike_park"]);
+				e->init(Data::entities["bike_park"]);
 				e->setPixelPos(b->getPos());
 				e->spr->setCenterRatio();
 
@@ -539,12 +529,10 @@ void Path::reflectProgress(r2::Bitmap* c, float p){
 }
 
 void Path::debugDraw() {
+
 	for(int i = 0; i < data.size();++i){
 		Vector2 p = data.data[i];
 		r2::Im::outerRect( r2::Bounds::fromTLBR(p.y-1,p.x-1,p.y+1,p.x+1), r::Color::Blue, g->cells);
-		for(int j = 0; j < 50;++j){
-			
-		}
 	}
 }
 

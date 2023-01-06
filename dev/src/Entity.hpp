@@ -2,6 +2,10 @@
 
 #include "r2/Node.hpp"
 
+struct EntityData;
+struct Path;
+class Game;
+
 struct EntityData{
 	std::string					name;
 	std::string					attack;
@@ -13,6 +17,9 @@ struct EntityData{
 	int							maxUpgrade = 0;
 	int							dmg = 1;
 	int							range = 30;
+	float						cooldown = 1.0f;
+
+	float						projSpeed = 0.1f;
 
 	bool						isMonster();
 	bool						isTurret() { return good; };
@@ -40,6 +47,12 @@ public:
 	float			cooldown = 0.0f;
 	Vector2			prevPos;
 
+	bool			fadingOut = false;
+	float			blinking = 0.0f;
+	bool			invincible = false;
+
+	int				hp = 0;
+
 	enum class State : int {
 		Running,
 	};
@@ -55,6 +68,8 @@ public:
 	void			setPixelPos(const Vector2& pos);
 	Vector2			getPixelPos();
 	void			syncPos();
+
+	void			hit(int dmg, EntityData * by = nullptr);
 
 	void			fire(Entity*opp);
 

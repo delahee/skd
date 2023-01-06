@@ -61,9 +61,10 @@ public:
 	rd::ABitmap*	kiwiPortrait = 0;
 
 	Path*			path=0;
-
+	int				frags = 0;
 	r2::Flow*		livesFlow = 0;
-
+	r2::Flow*		fragFlow = 0;
+	rd::Tweener		tw;
 	void			victory();
 	void			defeat();
 	void			hit();
@@ -76,5 +77,7 @@ public:
 
 	void			loadMap();
 	void			dressMap();
+
+	void			onFrag();
 };
 
