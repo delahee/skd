@@ -116,10 +116,8 @@ void Entity::update(double dt) {
 	}
 
 	if(blinking>0){
-		int fr4 = rs::Timer::frameCount % 8;
-		if(fr4 <= 4){
-			spr->alpha = 1.0f - spr->alpha;
-		}
+		int fr = (rs::Timer::frameCount+uid) % 8;
+		spr->alpha = (fr < 4);
 		blinking -= dt;
 		if (blinking <= 0)
 			spr->alpha = 1;

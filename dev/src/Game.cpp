@@ -12,11 +12,13 @@
 #include "rd/Garbage.hpp"
 #include "Entity.hpp"
 #include "r2/fx/Part.hpp"
+#include "FX.hpp"
 
 void Game::onFrag(){
 	frags++;
-	auto s = rd::ABitmap::mk("cup", Data::assets, fragFlow);
+	auto s = rd::ABitmap::mk("kiwifruit", Data::assets, fragFlow);
 	s->setCenterRatio(0.5, 1);
+	FX::blink(s);
 }
 
 void Game::defeat(){
@@ -446,7 +448,7 @@ void Game::dressMap(){
 		auto c = rd::ABitmap::mk("partCircle", Data::assets, b);
 		c->name = "foundation";
 		c->setCenterRatio(0.5, 0.5);
-		float s = 1.4;
+		float s = 1.4f;
 		c->setSize(s*Cst::GRID, s*Cst::GRID / 1.414f);
 		c->color = r::Color(0xeec39a);
 
