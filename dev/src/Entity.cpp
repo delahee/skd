@@ -1,4 +1,4 @@
-#include "stdafx.h"
+	#include "stdafx.h"
 
 #include "Game.hpp"
 #include "Entity.hpp"
@@ -67,6 +67,9 @@ void Entity::im(){
 
 void Entity::update(double dt) {
 	Super::update(dt);
+
+	if (game->curWave && game->curWave->stopped)
+		return;
 	if( path ){
 		auto n = path->data.plot(progress);
 

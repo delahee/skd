@@ -18,14 +18,18 @@ static void bootGame(r2::Node * root) {
 
 	new Game(root,sc,&sc->al);
 	new AnonAgent( updateTools, &sc->al);
+
+#ifdef PASTA_DEBUG
 	r2::im::HierarchyExplorer::toggle(App_GameState::me->mainScene);
+#endif
 }
 
 void updateTools(){
+#ifdef PASTA_DEBUG
 	if (Input::isKeyboardKeyJustReleased(Pasta::Key::KB_F1)) {
 		r2::im::HierarchyExplorer::toggle(App_GameState::me->mainScene);
 	}
-
+#endif
 }
 
 

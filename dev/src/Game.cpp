@@ -14,6 +14,7 @@
 #include "r2/fx/Part.hpp"
 #include "FX.hpp"
 
+static int towerEverBuild = 0;
 static r::Color KIWI = r::Color(0x663931);
 
 void Game::onFrag(){
@@ -33,8 +34,12 @@ void Wave::stop() {
 	stopped = true;
 }
 
+static bool defeated = false;
 void Game::defeat(){
+	if (defeated)
+		return;
 
+	defeated = true;
 	cells->visible = false;
 
 	auto sc = root->getScene();
@@ -118,6 +123,7 @@ void Game::beginGame(){
 	bossPortrait->y += 25;
 	tw.create(bossPortrait, VY, defy, TType::TEaseOut, 500);
 	bossPortrait->replay(10);
+	startWave();
 }
 
 void Game::victory() {
@@ -195,6 +201,9 @@ Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent
 		p->add(Vector2(Cst::GRID * 0.5, Cst::GRID * 0.5));
 		p->add(Vector2(Cst::W * 0.5 - Cst::GRID * 0.5, Cst::H * 0.5 - Cst::GRID * 0.5));
 		p->add(Vector2(Cst::W - Cst::GRID * 0.5, Cst::H - Cst::GRID * 0.5));
+#ifndef PASTA_DEBUG
+		p->cursor->visible = false;
+#endif
 	}
 	loadMap();
 
@@ -272,6 +281,7 @@ Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent
 	fastWave3();
 	fastWave3();
 
+	cc->waitForSeconds(20);
 	cc->add([=]() {victory(); });
 
 #ifndef PASTA_DEBUG
@@ -290,14 +300,17 @@ void Game::startWave(){
 	auto cc = wave1->cc;
 	cc->start();
 	curWave = wave1;
+
+	sfx("snd/8bitsurf.mp3");
 }
 
 void Game::update(double dt) {
 	Super::update(dt);
 	al.update(dt);
 	tw.update(dt);
-
+#ifdef PASTA_DEBUG
 	im();	
+#endif
 }
 
 template <> void Pasta::JReflect::visit(std::vector<Vector2> & v, const char* name) {
@@ -383,6 +396,10 @@ void Game::im(){
 		
 		if (Button("start wave1"))
 			startWave();
+
+		if (Button("stop"))
+			if (curWave)
+				curWave->stop();
 
 		if (Button("spawn monster")) {
 			spawn(StrRef("car"));
@@ -630,6 +647,25 @@ void Game::dressMap(){
 				c->drawCircle(0, 0, 12, 2);
 				c->toBack();
 				sfx("snd/hover.wav");
+
+				if(towerEverBuild == 0){
+					auto hint = ri18n::RichText::mk("*Click* to build a **bike park**\n**bike parks** converts cars to *bikes*",
+						b->parent);
+					hint->name = "hint";
+					hint->y += 8;
+					hint->addOutline(KIWI);
+					hint->x += b->x;
+					hint->y += b->y;
+				}
+				if (towerEverBuild == 1) {
+					auto hint = ri18n::RichText::mk("*bikes* are cleaner than cars\na cleaner world is healthier for *kiwis*",
+						b->parent);
+					hint->name = "hint";
+					hint->y += 8;
+					hint->addOutline(KIWI);
+					hint->x += b->x;
+					hint->y += b->y;
+				}
 			}
 		});
 
@@ -665,15 +701,21 @@ void Game::dressMap(){
 
 				sfx("snd/build.wav");
 
+				towerEverBuild++;
+
 				//
 				auto sel = b->findByName("sel");
 				if (sel) rd::Garbage::trash(sel);
+				auto hint = b->parent->findByName("hint");
+				if (hint) hint->destroy();
 			}
 		});
 
 		it->onMouseOuts.push_back([=](auto& ev) {
 			auto sel = b->findByName("sel");
 			if (sel) rd::Garbage::trash(sel);
+			auto hint = b->parent->findByName("hint");
+			if (hint) hint->destroy();
 		});
 	}
 }
