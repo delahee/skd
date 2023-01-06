@@ -41,13 +41,19 @@ void Entity::im(){
 		TreePop();
 	}
 
+	Value("x", x);
+	Value("y", y);
+
 	Value("rx", rx);
 	Value("cx", cx);
 
 	Value("ry", ry);
 	Value("cy", cy);
+
+	Value("cooldown", cooldown);
 	DragFloat("progress", &progress, 0, 10);
 
+	r2::Im::imNodeListEntry("this",this);
 	r2::Im::imNodeListEntry("spr",spr);
 	Super::im();
 }
@@ -83,6 +89,7 @@ void Entity::update(double dt) {
 	spr->setFlippedX(fl);
 	prevPos = getPixelPos();
 
+	if(data->good)
 	for(auto e : ALL){
 		if (e != this && e->data->isMonster()) {
 			Vector2 from = getPos();
@@ -91,8 +98,20 @@ void Entity::update(double dt) {
 				fire(e);
 		}
 	}
+	cooldown -= dt;
 
 	syncPos();
+}
+
+void Entity::setPixelPos(const Vector2& pos) {
+	x = pos.x;
+	y = pos.y;
+
+	cx = pos.x / Cst::GRID;
+	cy = pos.y / Cst::GRID;
+
+	rx = 1.0f * (x - cx * Cst::GRID) / Cst::GRID;
+	ry = 1.0f * (y - cy * Cst::GRID) / Cst::GRID;
 }
 
 Vector2 Entity::getPixelPos(){
@@ -105,17 +124,30 @@ void Entity::syncPos(){
 }
 
 void Entity::fire(Entity*opp) {
+	if (cooldown > 0)
+		return;
 	int here = 0;
 	
-	auto proj = rd::ABitmap::fromLib(Data::assets, "bike", game->cells);
+	auto proj = rd::ABitmap::fromLib(Data::assets, data->attack.c_str(), game->cells);
+	proj->name = "bullet";
 	proj->vars.set("gpType", "proj");
-	new r2::fx::Part(proj,&game->al);
+	proj->x = x;
+	proj->y = y;	
+
+	auto p = new r2::fx::Part(proj,&game->al);
+	
+	Vector2 dir = opp->getPos() - getPos();
+	dir = dir.getNormalizedSafeZero();
+	float sp = 0.1f;
+	p->dx = dir.x * sp;
+	p->dy = dir.y * sp;
+	p->setLife(10000);
+	cooldown = 1.0f;
 }
 
 bool EntityData::isMonster() {
-	for(auto &s :tags){
+	for(auto &s :tags)
 		if (s == "monster")
 			return true;
-	}
 	return false;
 }

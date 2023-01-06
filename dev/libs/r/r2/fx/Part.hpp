@@ -24,7 +24,7 @@ namespace r2 {
 			float		dsx = 0.f;	// scaleX
 			float		dsy = 0.f;	// scaleY
 
-			float		scaleMul = 0.f;
+			float		scaleMul = 1.f;
 			float		dr = 0.f;
 
 			float		frictX = 1.f;
@@ -61,15 +61,21 @@ namespace r2 {
 			float						setDelay(float d);
 
 		public:
-			Part(r2::Sprite* sp = nullptr, rd::AgentList* al = nullptr);
+										Part(r2::Sprite* sp, rd::AgentList* al = nullptr);
+			virtual						~Part();
 
+			virtual	void				dispose() override;
 			virtual void				update(double dt) override;
 			void						kill();
+			void						im();
+
+			static eastl::vector<Part*>	ALL;
 
 		protected:
 			float						rLife = 30.0f;
 			float						maxLife = 30.0f;
 			float						delay = 0.0f;
+
 		};
 	}
 }

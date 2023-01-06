@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Created with TexturePacker https://www.codeandweb.com/texturepacker -->
-<!-- $TexturePacker:SmartUpdate:f09e576951e4d2546a39b55dfd8eddf6:6180d8145033eb768248cce737f6201e:57ef0b4f36012e2dacefebfa7d58e2d4$ -->
+<!-- $TexturePacker:SmartUpdate:15d35afcb4ef92297dd5784bad91139b:1a888d0d19eb83ebab5f469c8cf2e441:57ef0b4f36012e2dacefebfa7d58e2d4$ -->
 <TextureAtlas imagePath="assets.png" width="715" height="128">
+    <SubTexture name="bike" x="503" y="120" width="9" height="7" frameX="-2" frameY="0" frameWidth="12" frameHeight="7"/>
     <SubTexture name="bike_park" x="605" y="91" width="27" height="19" frameX="-3" frameY="-7" frameWidth="32" frameHeight="32"/>
     <SubTexture name="car1" x="562" y="113" width="12" height="8" frameX="0" frameY="-4" frameWidth="12" frameHeight="12"/>
     <SubTexture name="car2" x="576" y="113" width="12" height="8" frameX="0" frameY="-4" frameWidth="12" frameHeight="12"/>

@@ -260,6 +260,7 @@ void r2::Node::removeAllChildren() {
 }
 
 void r2::Node::reset() {
+	destroyAllChildren();
 	name = "";
 	alpha = 1.0f;
 	resetTRS();

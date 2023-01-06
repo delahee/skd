@@ -79,8 +79,8 @@ namespace r2 {
 		double					x = 0.0;
 		double					y = 0.0;
 		double					z = 0.0;
-		double					scaleX = 0.0;
-		double					scaleY = 0.0;
+		double					scaleX = 1.0;
+		double					scaleY = 1.0;
 		double					rotation = 0.0;
 		double					alpha = 1.0;
 

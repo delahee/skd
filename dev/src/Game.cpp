@@ -11,6 +11,7 @@
 #include <EASTL/variant.h>
 #include "rd/Garbage.hpp"
 #include "Entity.hpp"
+#include "r2/fx/Part.hpp"
 
 static std::unordered_map<Str, EntityData*> edata;
 
@@ -69,6 +70,7 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	bg = new r2::Batch(board);
 	bg->name = "bg";
 	cells = new r2::Node(board);
+	cells->name = "cells";
 
 	{
 		auto p = path = new Path(&al);
@@ -128,8 +130,10 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 		auto d = new EntityData();
 		d->name = "bike_park";
 		d->tags.push_back( "turret" );
+		d->attack = "bike";
 		d->speed = 0.0f;
 		d->dmg = 5;
+		d->good = true;
 		edata[d->name] = d;
 	}
 
@@ -240,7 +244,7 @@ void Game::im(){
 	}
 
 	if (TreeNodeEx("entities", ImGuiTreeNodeFlags_DefaultOpen)) {
-		for(auto e : cells->children){
+		for(auto e : Entity::ALL){
 			auto asEnt = dynamic_cast<Entity*>(e);
 			if (!asEnt) continue;;
 
@@ -251,6 +255,17 @@ void Game::im(){
 		}
 		TreePop();
 	}
+
+	if (TreeNodeEx("Parts", ImGuiTreeNodeFlags_DefaultOpen)) {
+		for (auto p : r2::fx::Part::ALL) {
+			if (TreeNode(p->name.c_str())) {
+				p->im();
+				TreePop();
+			}
+		}
+		TreePop();
+	}
+
 
 	static bool paintMode = false;
 	Checkbox("paintmode", &paintMode);
@@ -479,11 +494,9 @@ void Game::dressMap(){
 				rd::Garbage::trash(ab);
 
 				//turn in tower
-				//auto h = rd::ABitmap::mk("bikePark", Data::assets, b);
-				//h->name = "bikePark";
-				//h->setCenterRatio();
-				auto e = new Entity(this, b);
+				auto e = new Entity(this, cells);
 				e->init(edata["bike_park"]);
+				e->setPixelPos(b->getPos());
 				e->spr->setCenterRatio();
 
 				//

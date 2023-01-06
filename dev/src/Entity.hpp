@@ -15,6 +15,7 @@ struct EntityData{
 	int							range = 30;
 
 	bool						isMonster();
+	bool						isTurret() { return good; };
 };
 
 class Entity : public r2::Node {
@@ -36,7 +37,7 @@ public:
 	int				dy = 0;
 
 	int				upgrade = 0;
-
+	float			cooldown = 0.0f;
 	Vector2			prevPos;
 
 	enum class State : int {
@@ -50,6 +51,8 @@ public:
 
 	void			im();
 	virtual void	update(double dt);
+
+	void			setPixelPos(const Vector2& pos);
 	Vector2			getPixelPos();
 	void			syncPos();
 

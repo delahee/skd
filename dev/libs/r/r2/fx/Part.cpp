@@ -4,10 +4,41 @@
 
 using namespace r2;
 using namespace r2::fx;
-Part::Part(r2::Sprite * sp, rd::AgentList * al) : rd::Agent(al) {
+
+eastl::vector<Part*> Part::ALL;
+
+Part::Part(r2::Sprite * sp, rd::AgentList * al) : rd::Agent(al), spr(sp) {
 	x = sp->x;
 	y = sp->y;
+	alpha = sp->alpha;
 	rd::Agent::deleteSelf = true;
+	ALL.push_back(this);
+}
+
+Part::~Part() {
+	if (!deleteSelf)
+		dispose();
+	rs::Std::remove(ALL,this);
+}
+
+void Part::im() {
+	using namespace ImGui;
+
+	Value("x", x);
+	Value("y", y);
+	Value("dy", dx);
+	Value("dx", dy);
+	Value("alpha", alpha);
+	Value("life", rLife);
+	Value("maxLife", maxLife);
+
+	if (spr) {
+		Value("visible", spr->visible);
+		r2::Im::imNodeListEntry("spr", spr);
+		r2::Im::imNodeListEntry("parent", spr->parent);
+	}
+	else
+		ImGui::Text("no sprite ?");
 }
 
 float Part::setDelay(float d){
@@ -21,6 +52,11 @@ float Part::setLife(float l) {
 	rLife = l;
 	maxLife = l;
 	return l;
+}
+
+void r2::fx::Part::dispose() {
+	if (spr) spr->destroy();
+	spr = nullptr;
 }
 
 void Part::update(double dt){
@@ -102,6 +138,7 @@ void Part::update(double dt){
 void Part::syncPos() {
 	spr->x = x;
 	spr->y = y;
+	spr->alpha = alpha;
 }
 
 void Part::kill(){
