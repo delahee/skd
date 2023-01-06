@@ -43,6 +43,11 @@ r2::Text::~Text() {
 	dispose();
 };
 
+void r2::Text::centered(){
+	setBlockAlign(ALIGN_CENTER);
+}
+
+
 void r2::Text::reset() {
 	SUPER::reset();
 	colors.clear();

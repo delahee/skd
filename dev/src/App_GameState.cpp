@@ -12,11 +12,11 @@ App_GameState* App_GameState::me = 0;
 
 static void updateTools();
 
-static void bootGame() {
+static void bootGame(r2::Node * root) {
 	auto app = App_GameState::me;
 	auto sc = app->mainScene;
 
-	new Game(sc,&sc->al);
+	new Game(root,sc,&sc->al);
 	new AnonAgent( updateTools, &sc->al);
 	r2::im::HierarchyExplorer::toggle(App_GameState::me->mainScene);
 }
@@ -75,8 +75,13 @@ void App_GameState::testGame(){
 		int remSX = (rs::Display::width() / s - Cst::W) * 0.5f;
 		int remSY = (rs::Display::height() / s - Cst::H) * 0.5f;
 
-		mainScene->setPan( -remSX, -remSY);
-		bootGame();
+		//mainScene->setPan( -remSX, -remSY);
+		auto n = r2::Node::fromPool(ps);
+		n->setPos(remSX, remSY);
+		n->name = "map";
+		auto stage = r2::Node::fromPool(ps);
+		stage->name = "stage";
+		bootGame(n);
 	}
 }
 

@@ -14,11 +14,20 @@
 #include "r2/fx/Part.hpp"
 #include "FX.hpp"
 
+static r::Color KIWI = r::Color(0x663931);
+
 void Game::onFrag(){
 	frags++;
-	auto s = rd::ABitmap::mk("kiwifruit", Data::assets, fragFlow);
-	s->setCenterRatio(0.5, 1);
-	FX::blink(s);
+
+	if (frags % 3 == 0) {
+		auto s = rd::ABitmap::mk("kiwifruit", Data::assets, fragFlow);
+		s->setCenterRatio(0.5, 1);
+		FX::blink(s);
+	}
+}
+
+void Wave::stop() {
+	cc->pause();
 }
 
 void Game::defeat(){
@@ -33,6 +42,43 @@ void Game::defeat(){
 	txt->x = 280;
 	txt->y = 150;
 	txt->scaleX = txt->scaleY = sc->getZoomY();
+	curWave->stop();
+}
+
+void Game::intro(){
+	auto sc = root->getScene();
+	auto n = r2::Node::fromPool(sc->getByName("stage"));
+	auto b = r2::Bitmap::fromColor(r::Color::Red, n);
+	auto w= rs::Display::width() / sc->getZoomX();
+	auto h = rs::Display::height() / sc->getZoomY();
+	b->setSize(w,h);
+	auto t = r2::Text::fromPool(nullptr, "SUPER\nKIWI DEFENSE", r::Color::Green, n);
+	t->setBlockAlign(r2::Text::ALIGN_CENTER);
+	t->setScale(3, 3);
+	t->x = w * 0.5f;
+	t->y = h * 0.33f;
+	t->addOutline(KIWI);
+
+	auto ab= rd::ABitmap::fromPool(Data::assets, "kiwi", n);
+	ab->setCenterRatio(0.5,1);
+	ab->x = w * 0.33f;
+	ab->y = h * 0.96f;
+	ab->setScale(8, 8);
+
+	auto e = r2::Text::fromPool(nullptr, "CLICK TO CONTINUE", r::Color::Green, n);
+	e->x = w * 0.5f;
+	e->y = h * 0.66f;
+	e->setScale(2, 2);
+	e->bhv = [=](auto) {
+		e->alpha = 1.0f * ((rs::Timer::frameCount % 16) <= 8);
+		if( rs::Sys::isMousePressed){
+			auto p = tw.create(n, VAlpha, 0, TType::TBurnIn, 600);
+			p->onEnd = [=](auto) {
+				n->destroy();
+			};
+		}
+	};
+
 }
 
 void Game::victory() {
@@ -66,15 +112,16 @@ void Game::hit() {
 	}
 }
 
-Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
-	root = new r2::StaticBox( r2::Bounds::fromTLWH(0,0,Cst::W,Cst::H),sc);
-	
+Game::Game(r2::Node* _root, r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
+	scRoot = _root;
+	root = new r2::StaticBox(r2::Bounds::fromTLWH(0, 0, Cst::W, Cst::H), scRoot);
+
 	Data::init();
 
 	tool.g = this;
 	board = new r2::Graphics(root);
 	board->name = "board";
-	board->y += 10;
+	board->y += 15;
 
 	auto b = new r2::Bitmap(r2::Tile::fromWhite(), board);
 	b->setSize(Cst::W, Cst::H);
@@ -95,22 +142,22 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 		p->add(Vector2(Cst::W - Cst::GRID * 0.5, Cst::H - Cst::GRID * 0.5));
 	}
 	loadMap();
-	
-	for(int y = 0; y < Cst::GRID_H+1;++y)
-		for (int x = 0; x < Cst::GRID_W+1; ++x) {
-			grid->drawLine(Vector2(x * Cst::GRID, 0), Vector2(x * Cst::GRID, Cst::H),1);
-			grid->drawLine(Vector2(0, y * Cst::GRID), Vector2(Cst::W, y * Cst::GRID),1);
+
+	for (int y = 0; y < Cst::GRID_H + 1; ++y)
+		for (int x = 0; x < Cst::GRID_W + 1; ++x) {
+			grid->drawLine(Vector2(x * Cst::GRID, 0), Vector2(x * Cst::GRID, Cst::H), 1);
+			grid->drawLine(Vector2(0, y * Cst::GRID), Vector2(Cst::W, y * Cst::GRID), 1);
 		}
 	grid->color = r::Color::Orange.mulAlpha(0.5);
 
-	
 
-	bossPortrait = rd::ABitmap::fromLib(Data::assets,"pixel",root);
+
+	bossPortrait = rd::ABitmap::fromLib(Data::assets, "elon", root);
 	bossPortrait->setCenterRatio(0.5, 1);
-	bossPortrait->setSize(64, 64);
 	bossPortrait->x = Cst::W * 0.5;
-	bossPortrait->y += 30;
+	bossPortrait->y += 20;
 	bossPortrait->backward(1);
+	bossPortrait->player.stop();
 
 	kiwiPortrait = rd::ABitmap::fromLib(Data::assets, "kiwi", root);
 	bossPortrait->setCenterRatio(0.5, 1);
@@ -120,7 +167,7 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 	kiwiPortrait->player.speed = 0.66f;
 
 	livesFlow = new r2::Flow(root);
-	for(int i = 0; i < 5; i++){
+	for (int i = 0; i < 5; i++) {
 		auto ra = rd::ABitmap::mk("kiwi_head", Data::assets, livesFlow);
 		ra->setCenterRatio();
 	}
@@ -131,25 +178,60 @@ Game::Game(r2::Scene* sc, rd::AgentList* parent) : Super(parent) {
 
 	fragFlow = new r2::Flow(root);
 	fragFlow->name = "fragFlow";
-	fragFlow->x = Cst::W ;
+	fragFlow->x = Cst::W;
 	fragFlow->y = 270;
 	fragFlow->horizontalSpacing = -20;
 	fragFlow->reflow();
 
+	//add two starting fruit
+	{
+		auto s = rd::ABitmap::mk("kiwifruit", Data::assets, fragFlow);
+		s->setCenterRatio(0.5, 1);
+		s = rd::ABitmap::mk("kiwifruit", Data::assets, fragFlow);
+		s->setCenterRatio(0.5, 1);
+	}
+
+	wave1 = new Wave();
+	auto cc = wave1->cc = new rgp::CineController("wave1", &al);
+
+	auto slowWave3 = [=]() { for (int i = 0; i < 3; ++i) {
+		cc->add([=]() { spawn("car");  });
+		cc->waitForSeconds(3);
+	}};
+
+	auto fastWave3 = [=]() { for (int i = 0; i < 4; ++i) {
+		cc->add([=]() { spawn("car");  });
+		cc->waitForSeconds(1);
+	}};
+
+	slowWave3();
+	fastWave3();
+	slowWave3();
+
+	slowWave3();
+	fastWave3();
+	slowWave3();
+
+	fastWave3();
+	fastWave3();
+	fastWave3();
+
+	cc->add([=]() {victory(); });
 
 	//TODO
-	//add one turret
-	//add wave definition
-	//add title screen
-	//add credits.txt
 	//add sound
-	//add cinematics
 	//add two more ennemies
 	//add three turrets
 	//add three turret upgrades
 	//add particles
 	
 	//finished !
+}
+
+void Game::startWave(){
+	auto cc = wave1->cc;
+	cc->start();
+	curWave = wave1;
 }
 
 void Game::update(double dt) {
@@ -218,6 +300,7 @@ void Game::spawn(Str& sp) {
 	EntityData* data = Data::entities[sp];
 	e->init(data);
 	e->path = path;
+	bossPortrait->replay(3);
 }
 
 void Game::im(){
@@ -233,10 +316,15 @@ void Game::im(){
 	Value("fps", std::lrint(1.0f / rs::Timer::dt));
 
 	if(TreeNodeEx("action",ImGuiTreeNodeFlags_DefaultOpen)){
+		if (Button("intro"))
+			intro();
 		if (Button("defeat"))
 			defeat();
 		if (Button("victory"))
-			victory();
+			victory(); 
+		
+		if (Button("start wave1"))
+			startWave();
 
 		if (Button("spawn monster")) {
 			spawn(StrRef("car"));
@@ -488,6 +576,19 @@ void Game::dressMap(){
 
 		it->onMouseButtonDowns.push_back([=](auto&ev) {
 			if( b->vars.getStr("gpType") == "towerSpot"){
+
+				if(fragFlow->children.empty()){
+					auto msg = ri18n::RichText::mk( "Not enough *kiwi*\nto build a **bike park**",cells);
+					msg->x = b->x;
+					msg->y = b->y;
+					msg->addOutline(KIWI);
+					msg->centered();
+					tw.delay(400,msg, VY, msg->y - 10);
+					tw.delay(400,msg, VAlpha, 0);
+					return;
+				}
+
+				fragFlow->children[0]->destroy();
 				b->vars.set("gpType", "tower");
 
 				//delete old

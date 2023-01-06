@@ -168,25 +168,29 @@ void Entity::hit(int dmg, EntityData* by) {
 }
 
 void Entity::fire(Entity*opp) {
+	auto& rand = rd::Rand::get();
 	if (cooldown > 0)
 		return;
 	int here = 0;
 	
 	auto proj = rd::ABitmap::fromLib(Data::assets, data->attack.c_str(), game->cells);
+	proj->setCenterRatio();
 	proj->name = "bullet";
 	proj->vars.set("gpType", "proj");
 	proj->x = x;
 	proj->y = y;	
+	proj->rotation = rand.angle();
 
 	auto p = new r2::fx::Part(proj,&game->al);
-	
+	p->dy = -0.01f;
+
 	Vector2 dir = opp->getPos() - getPos();
 	dir = dir.getNormalizedSafeZero();
 	float sp = data->projSpeed;
 	p->dx = dir.x * sp;
 	p->dy = dir.y * sp;
 	p->setLife(35);
-	p->dr = rd::Rand::get().either( -0.1f ,0.1f);
+	p->dr = 3*rd::Rand::get().either( -0.3f ,0.3f);
 	p->onUpdate = [=](auto) {
 		for (auto e : Entity::ALL) {
 			if ( e->data->isMonster() ) {

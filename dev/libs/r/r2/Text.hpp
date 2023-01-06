@@ -177,6 +177,7 @@ namespace r2{
 		void					setBgExtent(const r::Vector4 & ex);
 		void					setItalicBend(r::opt<int> point);
 
+		void					centered();
 	protected:
 		virtual void			addBg();
 
