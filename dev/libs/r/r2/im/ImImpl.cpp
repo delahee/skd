@@ -1633,63 +1633,7 @@ bool r2::Tile::im(){
 	using namespace ImGui;
 
 	bool changed = false;
-	ImGui::PushID(this);
-	ImGui::Text("Tile info:");
-	Indent();
-
-	if (TreeNode("Preview")) {
-		int w = width;
-		int h = height;
-		if( w > ImGui::GetWindowWidth()){
-			w = ImGui::GetWindowWidth() * 0.25;
-			h = height * ( w / width);
-		}
-		ImGui::Image(this, ImVec2(w, h));
-		TreePop();
-	}
-	if (tex) {
-		try {
-			if(tex->getPath())
-				ImGui::Text("tex  name   : %s", tex->getPath());
-			if (tex->getDebugName())
-				ImGui::Text("tex  dname  : %s", tex->getDebugName());
-			ImGui::Text("tex  id     : 0x%x", tex->getResourceId());
-			ImGui::Text("tex  size   : %d, %d", tex->getWidth(), tex->getHeight());
-			ImGui::Text("tile size   : %.2lf, %.2lf", width, height);
-		}
-		catch(...){
-			ImGui::Error("INVALID Texture");
-		}
-	}
-	else {
-		ImGui::Error("No Texture !!!");
-	}
-
-	ImGui::Text("uid      : %d", uid);
-	ImGui::PushItemWidth(124);
-
-	ImGui::Separator(ImGuiSeparatorFlags_Horizontal); // Prevent ImGuiSeparatorFlags_SpanAllColumns
-	if (ImGui::Button("Flip X")) {	flipX(); changed = true;} ImGui::SameLine();
-	if (ImGui::Button("Flip Y")) { flipY(); changed = true; }
-	if (ImGui::Button("Pick tile")) {
-		r2::im::TilePicker::forTile(*this);
-		changed = true;//not a good solution as tile fetching might be deferred but anw...
-	}
-	ImGui::Separator(ImGuiSeparatorFlags_Horizontal); // Prevent ImGuiSeparatorFlags_SpanAllColumns
-
-	r::Vector2 pivot = r::Vector2(getCenterRatioX(), getCenterRatioY());
-	if( ImGui::DragFloat2("pivot - ratio ()", pivot.ptr(),0.1f,-4.0f,4.0f ))
-		setCenterRatio(pivot.x, pivot.y);
-	changed |= ImGui::DragDouble2("pivot - pixel", &dx, 0.1, -100, 100, "%0.3lf");
-	changed |= ImGui::DragDouble2("xy", &x, 0.1, -100, 100, "%0.3lf");
-	changed |= ImGui::DragDouble2("size", &width, 0.1, -100, 100, "%0.3lf");
-	ImGui::Separator(ImGuiSeparatorFlags_Horizontal);
-
-	ImGui::PopItemWidth();
-	ImGui::SetNextItemWidth(252);
-	changed |= ImGui::DragDouble4("uv", &u1, 0.1, -100, 100, "%.3lf");
-	ImGui::PopID();
-	Unindent();
+	
 	return changed;
 }
 
