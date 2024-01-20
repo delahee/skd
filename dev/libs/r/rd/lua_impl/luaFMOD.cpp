@@ -8,8 +8,7 @@ using namespace std;
 using namespace r2;
 using namespace rd;
 using namespace Pasta; 
-
-void LuaScriptHost::injectFmod(sol::state & luaSol) {
+ {
 	luaSol.new_usertype<PointerWrapper<FMOD::Studio::EventDescription*>>("EventList",
 		sol::constructors<PointerWrapper<FMOD::Studio::EventDescription*>(int)>(),
 		//"GetPtr", &PointerWrapper<FMOD::Studio::EventDescription*>::GetPtr,			// DIDN'T WORK FOR NO REASON, use void* instead

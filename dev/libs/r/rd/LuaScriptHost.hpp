@@ -62,8 +62,6 @@ namespace rd {
 		virtual void			buildContext();
 
 		static	void			injectR(sol::state & luaSol);
-		static	void			injectImGui(sol::state & luaSol);
-		static	void			injectFmod(sol::state & luaSol);
 
 		virtual void			update(double dt);
 		virtual void			eval();

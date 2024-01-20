@@ -149,7 +149,7 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 	imguiLua["ImGuiInputTextFlags_AllowTabInput"] = ImGuiInputTextFlags_AllowTabInput;
 	imguiLua["ImGuiInputTextFlags_CtrlEnterForNewLine"] = ImGuiInputTextFlags_CtrlEnterForNewLine;
 	imguiLua["ImGuiInputTextFlags_NoHorizontalScroll"] = ImGuiInputTextFlags_NoHorizontalScroll;
-	imguiLua["ImGuiInputTextFlags_AlwaysInsertMode"] = ImGuiInputTextFlags_AlwaysInsertMode;
+	//imguiLua["ImGuiInputTextFlags_AlwaysInsertMode"] = ImGuiInputTextFlags_AlwaysInsertMode;
 	imguiLua["ImGuiInputTextFlags_ReadOnly"] = ImGuiInputTextFlags_ReadOnly;
 	imguiLua["ImGuiInputTextFlags_Password"] = ImGuiInputTextFlags_Password;
 	imguiLua["ImGuiInputTextFlags_NoUndoRedo"] = ImGuiInputTextFlags_NoUndoRedo;
@@ -350,8 +350,7 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 
 #pragma region [DONE] REGION: Cursor / Layout
 	imguiLua.set_function("Separator", sol::overload(
-		[]() { return ImGui::Separator(); },
-		[](int flags) { return  ImGui::Separator(flags); }
+		[]() { return ImGui::Separator(); } //,[](int flags) { return  ImGui::Separator(flags); }
 	));
 	imguiLua.set_function("SameLine", sol::overload(
 		[]() { return ImGui::SameLine(); },
