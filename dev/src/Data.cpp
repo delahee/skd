@@ -8,13 +8,11 @@ rd::TileLib* Data::assets = 0;
 std::unordered_map<Str, EntityData*> Data::entities;
 
 void Data::update(double dt) {
-	//assets->
+	
 }
 
 void Data::init(){
 	assets = r2::im::TilePicker::getOrLoadLib("assets.xml");
-	int here = 0;
-
 
 	{
 		auto d = new EntityData();
