@@ -167,8 +167,6 @@ void LuaScriptHost::buildContext() {
 	luaEngine.open_libraries(sol::lib::base, sol::lib::math, sol::lib::io, sol::lib::string, sol::lib::table, sol::lib::coroutine);
 
 	injectR(luaEngine);
-	injectImGui(luaEngine);
-	injectFmod(luaEngine);
 	luaEngine["tw"] = std::ref(tw);
 }
 
