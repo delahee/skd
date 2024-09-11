@@ -69,7 +69,6 @@ void App_GameState::testGame(){
 		PixelScene* ps = nullptr;
 		ps = new PixelScene(Cst::W,Cst::H);
 		ps->clearColor = r::Color::Blue;
-		ps->doClear = true;
 		regularBloom(ps,-1);
 		mainScene = ps;
 		float s = (int)rs::Display::height() / Cst::H;
@@ -157,6 +156,15 @@ void App_GameState::release() {
 }
 
 void App_GameState::paint(Pasta::Graphic* g) {
+	g->setClear(false);
+#ifdef _DEBUG
+	auto color = r::Color(0.1f, 0.5f, 0.1f, 1.0f);
+#else
+	auto color = r::Color(0.0f, 0.0f, 0.0f, 1.0f);
+#endif
+	auto clearAll = PASTA_CLEAR_COLOR | PASTA_CLEAR_DEPTH | PASTA_CLEAR_STENCIL;
+	Pasta::GraphicContext::GetCurrent()->clear(clearAll, color, rs::GfxContext::MTX_DEFAULT_ZMIN());
+
 	if (mainScene)
 		mainScene->render(g);
 
