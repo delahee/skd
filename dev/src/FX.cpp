@@ -1,16 +1,12 @@
-
-
 #include "stdafx.h"
 #include "FX.hpp"
-
-
 
 class BlinkAgent : public rd::Agent{
 public:
 	r2::Sprite* sp = 0;
 	double timer = 0.5f;
 
-	BlinkAgent(r2::Sprite* _sp, double _timer): rd::Agent(nullptr),timer(_timer),sp(_sp){
+	BlinkAgent(r2::Sprite* _sp, double _timer): rd::Agent(0,0),timer(_timer),sp(_sp){
 
 	}
 

@@ -1,6 +1,8 @@
 #include "CrossPlatform.hpp"
 #include "rd/String.hpp"
 
+//#define R_USE_STACKWALKER
+
 #ifndef PASTA_WIN
 #pragma message("Exclude this from compile on non win32 platforms");
 #endif
@@ -25,5 +27,33 @@ std::string rplatform::getLocalAppData() {
 
 void rplatform::shellExecuteOpen(const char* path){
 	ShellExecuteA(NULL, "open", path, NULL, NULL, SW_SHOWDEFAULT);
+}
+
+void rplatform::debugbreak(){
+#if PASTA_WIN
+	__debugbreak();
+#endif
+}
+
+#ifdef R_USE_STACKWALKER
+#include "StackWalker.h"
+//todo get the good dll from windows SDK
+class StrStackWalker : public StackWalker {
+public:
+	std::string buf;
+	StrStackWalker() : StackWalker() {}
+protected:
+	virtual void OnOutput(LPCSTR szText) {
+		buf += szText;
+		StackWalker::OnOutput(szText);
+	};
+}; 
+#endif
+void rplatform::getCallStack(std::string & out){
+#ifdef R_USE_STACKWALKER
+	auto n = new StrStackWalker();
+	n->ShowCallstack();
+	out = n->buf;
+#endif
 }
 #endif

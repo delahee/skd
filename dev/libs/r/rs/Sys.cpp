@@ -23,24 +23,33 @@
 #include "Sys.hpp"
 #include "rd/Tween.hpp"
 #include "rd/Garbage.hpp"
+#include "rplatform/CrossPlatform.hpp"
+#include "rplatform/Device.hpp"
+#include "rd/JSerialize.hpp"
+#include "rd/Console.hpp"
+#include "rs/InputEvent.hpp"
 
 using namespace Pasta;
 using namespace std;
 using namespace rs;
 
+
 double Sys::FPS = 60.0;
 
-AgentList rs::Sys::enterFrameProcesses;
-AgentList rs::Sys::exitFrameProcesses;
+rd::AgentList rs::Sys::enterFrameProcesses;
+rd::AgentList rs::Sys::exitFrameProcesses;
 
 std::vector< rs::IEventListener * > rs::Sys::eventListeners;
 std::string rs::Sys::bootDirectory;
 bool rs::Sys::hasInputKeyThisFrame=false;
+int rs::Sys::LOG_LEVEL = 0;
+
+double rs::Sys::lastMouseActivity = -1.0;
+double rs::Sys::lastKeyActivity = -1.0;
 
 static Pasta::u64 initTime = Pasta::Time::getTimeMarker();
 
-void rs::Sys::printTime(const char * s)
-{
+void rs::Sys::printTime(const char * s){
 	if (s == nullptr) s = "";
 	Pasta::u64 mark = Pasta::Time::getTimeMarker() - initTime;
 	double tms = Pasta::Time::getTimeNS(mark) / 1000000000.0;
@@ -88,13 +97,15 @@ bool rs::Sys::mouseWasPreviouslyPressed() {
 }
 
 static std::unordered_map<int, bool> downs;
-void rs::Sys::updateInputs()
-{
+void rs::Sys::updateInputs(){
+	double now = rs::Timer::now;
 	int prevX = prevMouseX = mouseX;
 	int prevY = prevMouseY = mouseY;
 	isMousePressed = false;
 	mouseX = -1;
 	mouseY = -1;
+	if (lastKeyActivity < 0) lastKeyActivity = now;
+	if (lastMouseActivity< 0) lastMouseActivity = now;
 
 	InputMgr * mgr = InputMgr::getSingleton();
 #ifndef PASTA_NX
@@ -112,44 +123,57 @@ void rs::Sys::updateInputs()
 
 		mouseX = x;
 		mouseY = y;
+
+		int newlyPressed = 0;
+		int newlyReleased = 0;
+
 		if (x == UINT16_MAX || y == UINT16_MAX) {
 			//no events
 		} else {
-			int newlyPressed = 0;
 			if (isButtonJustPressed(CT_MOUSE, MOUSE_LEFT))		newlyPressed |= BUTTON_LEFT;
 			if (isButtonJustPressed(CT_MOUSE, MOUSE_RIGHT))		newlyPressed |= BUTTON_RIGHT;
 			if (isButtonJustPressed(CT_MOUSE, MOUSE_MIDDLE))	newlyPressed |= BUTTON_MIDDLE;
-
-			int newlyReleased = 0;
+			
 			if (isButtonJustReleased(CT_MOUSE, MOUSE_LEFT))		newlyReleased |= BUTTON_LEFT;
 			if (isButtonJustReleased(CT_MOUSE, MOUSE_RIGHT))	newlyReleased |= BUTTON_RIGHT;
 			if (isButtonJustReleased(CT_MOUSE, MOUSE_MIDDLE))	newlyReleased |= BUTTON_MIDDLE;
 
 			if (newlyPressed) {
-				InputEvent onMouseDown(InputEventKind::EIK_Push, x, y);
-				onMouseDown.button = newlyPressed;
-				event(onMouseDown);
+				InputEvent ev(InputEventKind::EIK_Push, x, y);
+				ev.origin = InputOrigin::Mouse;
+				ev.button = newlyPressed;
+				event(ev);
 			}
 			if (newlyReleased) {
-				InputEvent onMouseUp(InputEventKind::EIK_Release, x, y);
-				onMouseUp.button = newlyReleased;
-				event(onMouseUp);
+				InputEvent ev(InputEventKind::EIK_Release, x, y);
+				ev.origin = InputOrigin::Mouse;
+				ev.button = newlyReleased;
+				event(ev);
 			}
 			if (prevX != x || prevY != y) {
-				InputEvent onMouseOver(InputEventKind::EIK_Over, x, y);
-				onMouseOver.button = mousePressedMask;
-				event(onMouseOver);
+				InputEvent ev(InputEventKind::EIK_Over, x, y);
+				ev.origin = InputOrigin::Mouse;
+				ev.button = mousePressedMask;
+				event(ev);
 			}
 		}
 
 		//wheel
 		float val = mgr->getKeyValue(CT_MOUSE, MOUSE_WHEEL);
 		if (val != 0.f) {
-			InputEvent onMouseWheel(InputEventKind::EIK_Wheel, x,y);
-			onMouseWheel.wheelDelta = val;
-			event(onMouseWheel);
+			InputEvent ev(InputEventKind::EIK_Wheel, x,y);
+			ev.origin = InputOrigin::Mouse;
+			ev.wheelDelta = val;
+			event(ev);
 		}
+
+		if ((prevMouseX != mouseX) || (prevMouseY != mouseY)) 
+			lastMouseActivity = now;
+
+		if(newlyPressed || newlyReleased)
+			lastMouseActivity = now;
 	}
+
 #endif
 
 	auto io = ImGui::GetIO();
@@ -157,6 +181,7 @@ void rs::Sys::updateInputs()
 		wchar_t c = io.InputQueueCharacters[i];
 		if( c != 0 ) {
 			InputEvent e(InputEventKind::EIK_Character);
+			e.origin = InputOrigin::Keyboard;
 			e.relX = -1;
 			e.relY = -1;
 			e.charCode = c;
@@ -169,6 +194,7 @@ void rs::Sys::updateInputs()
 			event(e);
 		rs::Sys::keyEvents.clear();
 		hasInputKeyThisFrame = true;
+		lastKeyActivity = rs::Timer::now;
 	}
 	else {
 		hasInputKeyThisFrame = false;
@@ -181,6 +207,7 @@ class KeyInterpector : public Pasta::ControllerListener {
 
 	virtual void notifyKeyPressed(ControllerType controller, Key key) {
 		InputEvent e(InputEventKind::EIK_KeyDown);
+		e.origin = rs::InputEvent::resolveOrigin(controller);
 		e.relX = -1;
 		e.relY = -1;
 		e.native = key;
@@ -189,7 +216,8 @@ class KeyInterpector : public Pasta::ControllerListener {
 
 	//beware scanning keyboard here s doomed
 	virtual void notifyKeyReleased(ControllerType controller, Key key) {
-		InputEvent e(InputEventKind::EIK_KeyUp);
+		rs::InputEvent e(InputEventKind::EIK_KeyUp);
+		e.origin = rs::InputEvent::resolveOrigin( controller );
 		e.relX = -1;
 		e.relY = -1;
 		e.native = key;
@@ -237,8 +265,10 @@ void rs::Sys::init() {
 	enterFrameProcesses.name = "enterFrameProcesses";
 	exitFrameProcesses.name = "exitFrameProcesses";
 
-	sysAsserts();
 	rd::Garbage::init();
+
+	new rd::SerializationRegister();
+	sysAsserts();
 }
 
 unsigned int rs::Sys::uintFromString(const char * val){
@@ -284,7 +314,6 @@ void rs::Sys::exitFrame(){
 	rd::Pools::exitFrame();
 }
 
-//ref https://oroboro.com/stack-trace-on-crash/
 
 #ifdef _WIN32
 #include <stdio.h>
@@ -296,18 +325,17 @@ void rs::Sys::exitFrame(){
 
 namespace rs {
 
-	static char signalMessage[1024 * 1024];
+	static std::string signalMessage;
 	static bool isInit = false;
-	std::function<void(const char*)> Sys::traceOverride = nullptr;
+	std::function<void(const char*)> Sys::traceOverride = {};
 
-	static void abortHandler(int signum) {
+	void abortHandler(int signum) {
+		printf("Abortion handler in progress\n");
 #ifdef _WIN32
 		// associate each signal with a signal name string.
-		memset(signalMessage, 0, sizeof(signalMessage));
 
 		const char* name = NULL;
-		switch (signum)
-		{
+		switch (signum) {
 		case SIGABRT: name = "SIGABRT";  break;
 		case SIGSEGV: name = "SIGSEGV";  break;
 			//case SIGBUS:  name = "SIGBUS";   break;
@@ -320,34 +348,57 @@ namespace rs {
 		// complex output systems like streams and the like may be corrupted. So we 
 		// make the most basic call possible to the lowest level, most 
 		// standard print function.
+
+		auto process = [&](const std::string& name, const std::string& s) {
+			signalMessage += "<"s+name+">"s + "\n";
+			signalMessage += s + "\n";
+			signalMessage += "</"s+name+">"s+"\n";
+		};
+
 		if (name)
-			sprintf(signalMessage, "Caught signal %d (%s)\n", signum, name);
-		else
-			sprintf(signalMessage, "Caught signal %d\n", signum);
+			process("signal_name", name);
+		process("signal_num", std::to_string(signum));
 
-		printf("Caught signal %d\n", signum);
+		process("game version", rs::StackTrace::versionLabel.c_str());
 
-		// Dump a stack trace.
-		// This is the function we will be implementing next.
+		if (rd::Console::ALL.size()) 
+			for (auto c : rd::Console::ALL) 
+				process("log",c->fullLog);
+		std::string cs;
+		rplatform::getCallStack(cs);
+		auto sp = rd::String::split(cs, "stackwalker\\StackWalker.cpp");
 
-		//printStackTrace();
+		process("timestamp", std::to_string(rs::Timer::getTimeStamp()));
+		process("now", std::to_string(rs::Timer::now));
+		process("dt", std::to_string(rs::Timer::dt));
+		process("dfr", std::to_string(rs::Timer::dfr));
 
+		if( sp.size() >= 2 ){
+			process("stack_top", rd::String::replace(sp[1],"\\","/"));
+			process("stack_context", rd::String::replace(sp[0], "\\", "/"));
+		}
+		else 
+			process("full_stack",cs);
+		
 		WCHAR tpath[1024];
 		memset(tpath, 0, sizeof(tpath));
 		GetTempPathW(sizeof(tpath), tpath);
 
 		WCHAR tpath2[1024];
 		memset(tpath2, 0, sizeof(tpath2));
-		swprintf_s(tpath2, sizeof(tpath2),L"%s%s",tpath,L"dump.txt");
+		swprintf_s(tpath2, sizeof(tpath2),L"%s%s",tpath,L"crashdump.xml");
 		
 		FILE * f = _wfopen(tpath2, L"w");
-		fprintf(f, signalMessage);
+		fprintf(f, signalMessage.c_str());
 		fflush(f);
 		fclose(f);
 
-		WCHAR msg[4096];
+
+		std::wstring tver = rd::String::toWString(rs::StackTrace::versionLabel.cpp_str() );
+
+		WCHAR msg[2048];
 		memset(msg, 0, sizeof(msg));
-		wsprintf(msg, L"Crash Dump saved at %s", tpath2);
+		wsprintf(msg, L"ver %s\nCrash dump saved at %s, retrieve it using bat/get_crashdump.xml", tver.c_str(), tpath2);
 		int msgboxID = MessageBox(NULL, msg, L"The game has encountered an error", MB_ICONERROR | MB_OK);
 
 #endif
@@ -357,6 +408,7 @@ namespace rs {
 		exit(signum);
 	}
 
+	Str StackTrace::versionLabel;
 	void StackTrace::init()
 	{
 		if (isInit) return;
@@ -368,22 +420,94 @@ namespace rs {
 		signal(SIGFPE, abortHandler);
 #endif
 
+		rplatform::Device::initPlatform();
 		isInit = true;
 	}
 
-	void sysConsolePrint(const char* msg)	{
+	void sysConsolePrint(const char* msg) {
 		cout << msg << "\n";
-	}
+	};
+
+	void trace(const char* msg, int level) {
+		if (Sys::LOG_LEVEL >= level)
+			trace(msg);
+	};
 
 	void trace(const char* msg) {
+		if (rd::String::isEmpty(msg))
+			return;
 		if (rs::Sys::traceOverride)
 			rs::Sys::traceOverride(msg);
-		else 
-			cout << msg << "\n";
+		else
+			cout << Str30f( "%0.2lf %s \n", rs::Timer::stamp(), msg ).c_str();
+	};
+
+
+	static std::unordered_map<Str,bool> once;
+
+	void trace(const string& msg) {
+		if (!msg.empty())
+			trace(msg.c_str());
+	};
+
+	//warning appears only once
+	void traceWarning(const char* msg) {
+		StrRef msgR(msg);
+		if (!rs::Std::exists(once, msg))
+			once[msgR] = true;
+		else
+			return;
+		std::string str;
+		str += "\033[38;5;208m";
+		str += msg;
+		str += +"\033[0m";
+		trace(str);
+	};
+
+	void traceError(const char* msg) {
+		std::string str;
+		str += "\033[31;5;31m";
+		str += msg;
+		str += +"\033[0m";
+		trace(str);
+	};
+
+	void traceGreenlight(const char* msg) {
+		std::string str;
+		str += "\033[38;5;92m";
+		str += msg;
+		str += +"\033[0m";
+		trace(str);
+	};
+
+	void traceObject(const char* prefix, void* obj){
+#ifndef PASTA_FINAL
+		if (obj) {
+			Str256f msg("traceObj: %s addr:0x%x", prefix, obj);
+			trace(msg);
+		}
+#endif 
 	}
 
-	void trace(const string & msg){
-		trace(msg.c_str());
+	void traceAgent(const char* prefix, rd::Agent* ag) {
+#ifndef PASTA_FINAL
+		if (ag) {
+			if (ag->name.length() == 0) {
+				int here = 0;
+			}
+			Str256f msg("traceAg: %s name: %s uid:%ld addr:0x%x", prefix, ag->name.c_str(), ag->_UID, ag);
+			trace(msg);
+		}
+#endif 
+	}
+
+	void traceNode(const char* prefix, r2::Node * obj) {
+#ifndef PASTA_FINAL
+		if (obj) {
+			Str256f msg("traceNode: %s name:%s uid:%ld addr:0x%lx", prefix, obj->name.c_str(),obj->uid,obj);
+			trace(msg);
+		}
+#endif 
 	}
 
 }
@@ -492,3 +616,12 @@ bool rs::Sys::filePickForOpen(const std::vector<std::pair<std::string, std::stri
 	return false;
 #endif
 }
+
+/*
+void rs::tracef(const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	trace(Str64f(format, args));
+	va_end(args);
+};
+*/

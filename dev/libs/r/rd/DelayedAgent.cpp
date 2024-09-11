@@ -1,7 +1,26 @@
 #include "stdafx.h"
 #include "DelayedAgent.hpp"
 
-#define SUPER Agent
+using namespace rd;
+DelayedAgent::DelayedAgent(std::function<void(void)> _cbk, float delayMs, AgentList* list) : Agent(list) {
+	setName("DelayedAgent");
+	cbk = _cbk;
+	durMs = delayMs;
+}
+
+DelayedAgent::DelayedAgent() : Agent(0,0) {
+	setName("DelayedAgent");
+}
+
+DelayedAgent::~DelayedAgent() {
+
+	dispose();
+}
+
+void DelayedAgent::onDispose() {
+	cbk = {};
+}
+
 void DelayedAgent::update(double dt) {
 	Agent::update(dt);
 
@@ -17,10 +36,6 @@ void DelayedAgent::update(double dt) {
 	}
 }
 
-void DelayedAgent::dispose() {
-	Agent::dispose();
-}	
-#undef SUPER
 
 static rs::Pool<GDelayedAgent> gdaPool;
 
@@ -34,11 +49,15 @@ void GDelayedAgent::update(double dt){
 	DelayedAgent::update(dt);
 }
 
-void GDelayedAgent::dispose() {
+void GDelayedAgent::onDispose() {
 	bus = nullptr;
+}
+
+void GDelayedAgent::dispose() {
+	onDispose();
+	detach();
 	if (pooled)
-		gdaPool.free(this);
-	DelayedAgent::dispose();
+		gdaPool.release(this);
 }
 
 GDelayedAgent* GDelayedAgent::fromPool(std::function<void(void)> a, float b, AgentList* c ){

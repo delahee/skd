@@ -1,4 +1,4 @@
-
+#pragma once
 #ifndef B3_BVH_SUBTREE_INFO_DATA_H
 #define B3_BVH_SUBTREE_INFO_DATA_H
 

@@ -1,3 +1,4 @@
+#pragma once
 #include "BulletCollision/BroadphaseCollision/btAxisSweep3.cpp"
 #include "BulletCollision/BroadphaseCollision/btDbvt.cpp"
 #include "BulletCollision/BroadphaseCollision/btOverlappingPairCache.cpp"

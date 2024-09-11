@@ -1,27 +1,17 @@
 #include "stdafx.h"
 
-#include <EASTL/vector.h>
-#include <vector>
-#include <algorithm>
-
-#include "platform.h"
-#include "1-graphics/geo_vectors.h"
-#include "1-graphics/Graphic.h"
-#include "1-graphics/GraphicContext.h"
-#include "1-graphics/GraphicEnums.h"
-#include "1-graphics/ShaderProgram.h"
-#include "1-graphics/ShaderParam.h"
-
 #include "Sprite.hpp"
 #include "Batch.hpp"
 #include "BatchElem.hpp"
+#include "rs/GfxContext.hpp"
 
+
+using namespace rs;
 using namespace r2;
 using namespace Pasta;
 
-#define SUPER Sprite
 
-Batch::Batch( Node * parent ) : SUPER(parent) {
+Batch::Batch( Node * parent ) : Super(parent) {
 	name = "Batch#" + std::to_string(uid);
 }
 
@@ -31,7 +21,7 @@ Batch::~Batch() {
 
 void r2::Batch::dispose() {
 	destroyAllElements();
-	SUPER::dispose();
+	Super::dispose();
 	beforeDrawFlush = nullptr;
 }
 
@@ -48,6 +38,16 @@ r2::BatchElem* r2::Batch::getElement(int idx) {
 	}
 
 	return nth;
+}
+
+r2::BatchElem* r2::Batch::getElementByTag(const char* tag) {
+	BatchElem* cur = head;
+	while (cur) {
+		if (cur->vars.hasTag(tag))
+			return cur;
+		cur = cur->next;
+	}
+	return nullptr;
 }
 
 r2::BatchElem* r2::Batch::getElementByName(const char* name) {
@@ -187,109 +187,139 @@ void r2::Batch::setTransparency(rs::GfxContext* ctx, BatchElem * elem) {
 	g->applyContextTransparency();
 }
 
+r2::BufferCache* Batch::createBuffers(BatchElem* head) {
+	if (nbBuffers >= bufCache.size())
+		bufCache.emplace_back();
+	bufCache[nbBuffers].head = head;
+	bufCache[nbBuffers].fbuf.clear();
+	bufCache[nbBuffers].ibuf.clear();
+
+	bufCache[nbBuffers].fbuf.reserve(16 + nbElems * 8);
+	bufCache[nbBuffers].ibuf.reserve(16 + nbElems * 8);
+	return &bufCache[nbBuffers++];
+}
+
 void r2::Batch::draw(rs::GfxContext* ctx) {
 	if (!shouldRenderThisPass(ctx)) return;
 
 	Pasta::Graphic* g = ctx->gfx;
-	
-	//prepare sizing
-	auto nbVisible = 0;
-	for (BatchElem * it = head; it != nullptr; it = it->next)
-		if (it->shouldRender(ctx))
-			nbVisible++;
-	if (nbVisible == 0)
-		return;
-	int count = nbVisible;
 
 	const int stride = 3 + 2 + 4 + (hasNormals ? 3 : 0);
 	const int verts = 4; // doesn't take into account custom BatchElem
-	const int tri = 2;	
-
-	nbSubmit = 0;
-	fbuf.clear();
-	if(fbuf.capacity() < count * verts * stride)
-		fbuf.reserve(count * verts * stride);
-	ibuf.clear();
-	if (ibuf.capacity() < count * tri * 2)
-		ibuf.reserve(count * tri * 2);
-
-	if (useExtraPass && ctx->currentPass == rs::Pass::ExtraPass0 && beforeExtraPass) beforeExtraPass(this);
-
-	//prepare context
-	g->pushContext();
-
-	if (trsDirty && !(nodeFlags & NF_MANUAL_MATRIX)) syncMatrix();
-	ctx->loadModelMatrix(mat);
-	
-	BatchElem * tHead = nullptr;
-	for (auto it = head; it != nullptr; it = it->next) {
-		if (it->shouldRender(ctx)) {
-			tHead = it;
-			break;
-		}
-	}
-
-	if (!tHead) {
-		g->popContext();
-		return;
-	}
-
-	applyDepth(ctx);
-
-	g->setVertexDeclaration(VD_POSITIONS | VD_TEXCOORDS | VD_COLORS | (hasNormals ? VD_NORMALS : 0));
-
-	Pasta::Color c(color.r, color.g, color.b, color.a * alpha * ctx->alpha.back());
-	g->setColor(c);
-	g->setAlpha(c.a);
-	if (additionnalTexture != nullptr)
-		g->setTexture(Pasta::ShaderStage::Fragment, 1, additionnalTexture);
-	
-//------------------
-#define SEND_BATCH() \
-	bindTile(ctx, tHead->tile); \
-	setShader(ctx); \
-	setTransparency(ctx, tHead); \
-	if( beforeDrawFlush) beforeDrawFlush(); \
-	g->drawIndexed(PrimitiveType::Triangles, fbuf.data(), fbuf.size() / stride, ibuf.data(), ibuf.size()); \
-	fbuf.clear(); \
-	ibuf.clear(); \
-	nbSubmit++;
-
-//------------------
+	const int tri = 2;
 
 	int nbDrawn = 0;
-	BatchElem * tI = tHead;
-	while (tI) {
-		if (!tI->shouldRender(ctx)) {
-			tI = tI->next;
-			continue;
-		}
+	nbSubmit = 0;
 
-		if (tI->getTexture() != tHead->getTexture() || tI->blendmode != tHead->blendmode) {
-			SEND_BATCH();
-			tHead = tI;
-		}
+	if (ctx->currentPass != Pass::DepthEqWrite) {
+		nbBuffers = 0;
 
-		if (ctx->currentPass == rs::Pass::Picking) {
-			const r::Color oldColor = tI->color;
-			const float oldAlpha = tI->alpha;
-			tI->color.r = ((tI->uid      ) & 0x00FFFFFF);
-			tI->color.g = ((tI->uid >> 24) & 0x00FFFFFF);
-			tI->color.b = ((tI->uid >> 48) & 0x0000FFFF);
-			tI->color.a = 1.0f;
-			tI->alpha = 1.0f;
-			tI->pushQuad(fbuf, ibuf);
-			tI->color = oldColor;
-			tI->alpha = oldAlpha;
-		}
-		else if (hasNormals) tI->pushQuadNormals(fbuf, ibuf);
-		else tI->pushQuad(fbuf, ibuf);
+		//prepare sizing
+		auto nbVisible = 0;
+		BatchElem* tHead = nullptr;
+		for (BatchElem * it = head; it != nullptr; it = it->next)
+			if (it->shouldRender(ctx)) {
+				if(!tHead) tHead = it;
+				nbVisible++;
+			}
+
+		if (nbVisible == 0 || !tHead)
+			return;
+		int count = nbVisible;
+
+		r2::BufferCache* buffers = createBuffers(tHead);
+
+		if (useExtraPass && ctx->currentPass == rs::Pass::ExtraPass0 && beforeExtraPass) beforeExtraPass(this);
+
+		//prepare context
+		g->pushContext();
+
+		if (trsDirty && !(nodeFlags & NF_MANUAL_MATRIX)) syncMatrix();
+		ctx->loadModelMatrix(mat);
+
+		applyDepth(ctx);
+
+		g->setVertexDeclaration(VD_POSITIONS | VD_TEXCOORDS | VD_COLORS | (hasNormals ? VD_NORMALS : 0));
+
+		Pasta::Color c(color.r, color.g, color.b, color.a * alpha * ctx->alpha.back());
+		g->setColor(c);
+		g->setAlpha(c.a);
+		if (additionnalTexture != nullptr)
+			g->setTexture(Pasta::ShaderStage::Fragment, 1, additionnalTexture);
+	
+	//------------------
+	#define SEND_BATCH() \
+		bindTile(ctx, tHead->tile); \
+		setShader(ctx); \
+		setTransparency(ctx, tHead); \
+		if (beforeDrawFlush) beforeDrawFlush(); \
+		g->drawIndexed(PrimitiveType::Triangles, buffers->fbuf.data(), buffers->fbuf.size() / stride, buffers->ibuf.data(), buffers->ibuf.size()); \
+		nbSubmit++;
+	//------------------
+
+		BatchElem * tI = tHead;
+		while (tI) {
+			if (!tI->shouldRender(ctx)) {
+				tI = tI->next;
+				continue;
+			}
+
+			if (tI->getTexture() != tHead->getTexture() || tI->blendmode != tHead->blendmode) {
+				SEND_BATCH();
+				tHead = tI;
+
+				buffers = createBuffers(tHead);
+			}
+
+			if (ctx->currentPass == rs::Pass::Picking) {
+				const r::Color oldColor = tI->color;
+				const float oldAlpha = tI->alpha;
+				tI->color.r = ((tI->uid      ) & 0x00FFFFFF);
+				tI->color.g = ((tI->uid >> 24) & 0x00FFFFFF);
+				tI->color.b = ((tI->uid >> 48) & 0x0000FFFF);
+				tI->color.a = 1.0f;
+                tI->alpha = 1.0f;
+                if (hasNormals) tI->pushQuadNormals(buffers->fbuf, buffers->ibuf);
+                else tI->pushQuad(buffers->fbuf, buffers->ibuf);
+				tI->color = oldColor;
+				tI->alpha = oldAlpha;
+			}
+			else if (hasNormals) tI->pushQuadNormals(buffers->fbuf, buffers->ibuf);
+			else tI->pushQuad(buffers->fbuf, buffers->ibuf);
 		
-		nbDrawn++;
-		tI = tI->next;
+			nbDrawn++;
+			tI = tI->next;
+		}
+		SEND_BATCH();
+	#undef SEND_BATCH
+
+	} else {
+		//prepare context
+		g->pushContext();
+
+		if (trsDirty && !(nodeFlags & NF_MANUAL_MATRIX)) syncMatrix();
+		ctx->loadModelMatrix(mat);
+
+		applyDepth(ctx);
+
+		g->setVertexDeclaration(VD_POSITIONS | VD_TEXCOORDS | VD_COLORS | (hasNormals ? VD_NORMALS : 0));
+
+		Pasta::Color c(color.r, color.g, color.b, color.a * alpha * ctx->alpha.back());
+		g->setColor(c);
+		g->setAlpha(c.a);
+		if (additionnalTexture != nullptr && ctx->currentPass != Pass::Picking)
+			g->setTexture(Pasta::ShaderStage::Fragment, 1, additionnalTexture);
+
+		for (int i = 0; i < nbBuffers; ++i) {
+			bindTile(ctx, bufCache[i].head->tile);
+			setShader(ctx);
+			setTransparency(ctx, bufCache[i].head);
+			if (beforeDrawFlush) beforeDrawFlush();
+			g->drawIndexed(PrimitiveType::Triangles, bufCache[i].fbuf.data(), bufCache[i].fbuf.size() / stride, bufCache[i].ibuf.data(), bufCache[i].ibuf.size());
+			nbSubmit++;
+			nbDrawn++;
+		}
 	}
-	SEND_BATCH();
-#undef SEND_BATCH
 
 #ifdef _DEBUG
 	ctx->nbBatchElemDrawn += nbDrawn;
@@ -298,7 +328,9 @@ void r2::Batch::draw(rs::GfxContext* ctx) {
 
 	//post cleanup
 	g->setVertexDeclaration(0);
-	g->setTexture(ShaderStage::Fragment, 0, NULL);
+    g->setTexture(ShaderStage::Fragment, 0, nullptr);
+    if (additionnalTexture != nullptr)
+		g->setTexture(ShaderStage::Fragment, 1, nullptr);
 	g->popContext();
 
 	if (useExtraPass && ctx->currentPass == rs::Pass::ExtraPass0 && afterExtraPass) afterExtraPass(this);
@@ -332,6 +364,8 @@ struct PrioCompare {
 };
 
 void Batch::add(BatchElem * e) {
+	if (!e) return;
+
 	if (e->batch && e->batch != this) e->batch->remove(e);
 
 	e->batch = this;
@@ -398,16 +432,14 @@ bool r2::Batch::sanityCheck() {
 
 BatchElem * r2::Batch::alloc(Tile * _tile, double _priority) {
 	BatchElem * elem = rd::Pools::elems.alloc(); 
-	if (_tile != nullptr) {
-		elem->setTile(_tile);
-		elem->ownsTile = false;
-	}
+	if (_tile != nullptr) 
+		elem->setTile(_tile,false);
 	elem->setPriority(_priority);
 	add(elem);
 	return elem;
 }
 
-void r2::Batch::free(BatchElem * e) {
+void r2::Batch::release(BatchElem * e) {
 	remove(e);
 	e->destroy();
 }
@@ -435,7 +467,7 @@ void r2::Batch::poolBackAllElements() {
 		BatchElem * n = cur->next;
 		
 		cur->dispose();
-		rd::Pools::free(cur);
+		rd::Pools::release(cur);
 
 		cur = n;
 	}
@@ -490,6 +522,7 @@ Bounds r2::Batch::getMyLocalBounds() {
 
 		if (!e->getTile()) continue;
 		if (!e->getTexture()) continue;
+		if (e->beFlags & NF_SKIP_MEASURES_FOR_BOUNDS) continue;
 
 		Tile * t = e->getTile();
 
@@ -514,11 +547,11 @@ Bounds r2::Batch::getMyLocalBounds() {
 	return b;
 }
 
-r2::BatchElem* r2::Batch::firstElem() {
+r2::BatchElem* r2::Batch::getFirstElement() {
 	return head;
 }
 
-r2::BatchElem* r2::Batch::getByUID(r::uid _uid) {
+r2::BatchElem* r2::Batch::getElementByUID(r::uid _uid) {
 	auto el = head;
 	while(el){
 		if (el->uid == _uid)
@@ -531,7 +564,7 @@ r2::BatchElem* r2::Batch::getByUID(r::uid _uid) {
 Node * Batch::clone(Node * n) {
 	if (!n) n = new Batch();
 
-	SUPER::clone(n);
+	Super::clone(n);
 
 	Batch * s = dynamic_cast<Batch*>(n);
 	if (s) {//we may sometime want to transfer only parent!
@@ -547,7 +580,7 @@ Node * Batch::clone(Node * n) {
 }
 
 void r2::Batch::findByUID(r::u64 uid, r2::Node *& node, r2::BatchElem *& elem) {
-	SUPER::findByUID(uid, node, elem);
+	Super::findByUID(uid, node, elem);
 	if (node || elem) return;
 	
 	BatchElem * cur = head;
@@ -567,7 +600,7 @@ Batch* r2::Batch::fromPool(Node* parent) {
 }
 
 void r2::Batch::unitTest() {
-
+#ifdef _DEBUG
 	{
 		Batch * b = new Batch();
 		BatchElem * e = b->alloc();
@@ -681,7 +714,7 @@ void r2::Batch::unitTest() {
 
 		assert(b);
 
-		b->free(e1);
+		b->release(e1);
 		assert(b->getElement(0) == e3);
 		assert(b->getElement(1) == e2);
 		assert(b->getElement(2) == e0);
@@ -699,7 +732,7 @@ void r2::Batch::unitTest() {
 
 		assert(b);
 
-		b->free(e3);
+		b->release(e3);
 		assert(b->getElement(0) == e2);
 		assert(b->getElement(1) == e0);
 		assert(b->getElement(2) == e1);
@@ -880,8 +913,5 @@ void r2::Batch::unitTest() {
 	}
 
 	int i = 0;
-
+#endif
 }
-
-
-#undef SUPER

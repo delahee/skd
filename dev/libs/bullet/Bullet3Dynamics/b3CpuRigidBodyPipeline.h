@@ -12,7 +12,7 @@ subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 //Originally written by Erwin Coumans
-
+#pragma once
 #ifndef B3_CPU_RIGIDBODY_PIPELINE_H
 #define B3_CPU_RIGIDBODY_PIPELINE_H
 

@@ -1,5 +1,7 @@
 #include "stdafx.h"
-
+#include "r2/Node.hpp"
+#include "r2/Text.hpp"
+#include "r2/Graphics.hpp"
 #include "r2/Scene.hpp"
 #include "r2/BatchElem.hpp"
 #include "BatchElemExplorer.hpp"
@@ -23,8 +25,8 @@ BatchElemExplorer::BatchElemExplorer(r2::BatchElem*_n, bool killPrevious) : n(_n
 	if (killPrevious) 
 		killAll();
 	rd::Agent::name = "BatchElem Explorer";
-	name = n->name + " uid:" + to_string(n->uid);
-	name = string("Batch Element Properties: ") + name + "###BatchElemInspector";
+	name = n->name.cpp_str() + " uid:" + to_string(n->uid);
+	name = string("Batch Element Properties: ") + name.cpp_str() + "###BatchElemInspector";
 	if (n->batch) {
 		Scene* sc = n->batch->getScene();
 		if (sc)
@@ -48,6 +50,20 @@ BatchElemExplorer::~BatchElemExplorer() {
 }
 
 void BatchElemExplorer::update(double dt) {
+
+	//try to handle deleted nodes without crashing
+	try{
+		volatile auto str = n->name.c_str();
+	}
+	catch(std::exception e){
+		n = nullptr;
+		opened = false;
+		safeDestruction();
+		return;
+	}
+
+	//continue anyway
+
 	if (doFocus) {
 		ImGuiWindow* window = ImGui::FindWindowByName(name.c_str());
 		if (window && window->DockNode && window->DockNode->TabBar)
@@ -81,7 +97,7 @@ void BatchElemExplorer::update(double dt) {
 		ImGui::PopID();
 	}
 	ImGui::End();
-	if (!opened) delete this;
+	if (!opened) safeDestruction();
 }
 
 BatchElemExplorer* BatchElemExplorer::edit(r2::BatchElem * _n) {
@@ -107,7 +123,7 @@ void BatchElemExplorer::onDeletion(r2::BatchElem * n) {
 }
 
 void BatchElem::im() {
-	
+	using namespace ImGui;
 	if (destroyed) {
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
 		ImGui::Text(ICON_MD_WARNING " This element is deleted");
@@ -128,6 +144,8 @@ void BatchElem::im() {
 		}
 		ImGui::DragFloat("rotation", &rotation, 0.05f, -PASTA_PI * 2, PASTA_PI * 2);
 		ImGui::SetNextItemWidth(124);
+		if(tile)
+			ImGui::Value("size", Vector2(width(),height()));
 		ImGui::DragFloat2("scale", &scaleX);
 
 		if (ImGui::TreeNode("Flags")) {
@@ -147,7 +165,9 @@ void BatchElem::im() {
 		}
 
 		ImGui::PushItemWidth(120); 
-		ImGui::LabelText("User Data", "0x%lx / %ld", (u64)(userdata), (u64)(userdata));
+		Str tags = vars.getTags();
+		ImGui::LabelText("tags", tags.c_str());
+		vars.im();
 		ImGui::PopItemWidth();
 		
 		ImGui::Separator();
@@ -177,16 +197,33 @@ void BatchElem::im() {
 			ImGui::EndCombo();
 		}
 
+		if (ImGui::TreeNode(ICON_MD_GAMEPAD " Actions")) {
+			if( Button("Flip X"))
+				tile->flipX();
+			SameLine();
+			if (Button("Flip Y"))
+				tile->flipY();
+			TreePop();
+		}
+
 		if (ImGui::TreeNode(ICON_MD_IMAGE " Tile")) {
 			if (tile) tile->im();
 			if (ImGui::Button("Change Tile")) {
-				if (!this->tile) {
-					this->setTile(rd::Pools::tiles.alloc());
-					this->ownsTile = true;
-				}
-				Promise* p = r2::im::TilePicker::forTile(*tile);
+				if (!this->tile) 
+					this->setTile(rd::Pools::tiles.alloc(),true);
+					
+				
+				rd::Promise* p = r2::im::TilePicker::forTile(*tile);
 			};
 			ImGui::TreePop();
+		}
+
+		rd::ABatchElem* asBe = dynamic_cast<rd::ABatchElem*>(this);
+		if (asBe) {
+			if (TreeNode("Animated")) {
+				asBe->player.im();
+				TreePop();
+			}
 		}
 
 		ImGui::Unindent();

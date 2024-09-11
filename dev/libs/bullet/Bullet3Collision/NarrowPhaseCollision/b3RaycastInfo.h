@@ -1,4 +1,4 @@
-
+#pragma once
 #ifndef B3_RAYCAST_INFO_H
 #define B3_RAYCAST_INFO_H
 

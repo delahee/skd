@@ -22,14 +22,12 @@ using namespace rs;
 using namespace r2;
 using namespace rd;
 
-#define SUPER Node
 
-Sprite::Sprite(Node * parent) : SUPER( parent ){
-	
+Sprite::Sprite(Node * parent) : Super( parent ){
+	setName("r2::Sprite");
 }
 
 Sprite::~Sprite() {
-	
 }
 
 void r2::Sprite::setColor(int col, float a) {
@@ -55,8 +53,6 @@ bool Sprite::shouldRenderThisPass(rs::GfxContext* ctx) {
 	if (ctx->currentPass == rs::Pass::Picking) {
 		if (nodeFlags & (NF_UTILITY | NF_EDITOR_FROZEN | NF_EDITOR_PROTECT))
 			return false; // do not pick frozen, protected or custom shaded node
-		if (overrideShader)
-			return false;
 		return true;
 	}
 
@@ -86,10 +82,10 @@ double r2::Sprite::getFinalAlpha() {
 }
 
 void r2::Sprite::dispose() {
-	SUPER::dispose();
+	Super::dispose();
 	
 	color = r::Color();
-	alpha = 1.0f;
+	alpha = 1.0;
 
 	depthRead = false;
 	depthWrite = false;
@@ -132,6 +128,10 @@ void r2::Sprite::reset(){
 	additionnalTexture = nullptr;
 	shader = r2::Shader::SH_Basic;
 	shaderValues.dispose();
+
+    useExtraPass = false;
+    beforeExtraPass = {};
+	afterExtraPass = {};
 }
 
 void r2::Sprite::draw(rs::GfxContext* ctx) {
@@ -165,10 +165,12 @@ bool Sprite::drawPrepare(rs::GfxContext * ctx) {
 	if (!shouldRenderThisPass(ctx)) return false;
 
 	Tile * tile = getPrimaryTile();
-	if (!tile) return false;
+	if (!tile) 
+		return false;
 
 	Pasta::Texture * texture = tile->getTexture();
-	if (!texture) return false;
+	if (!texture) 
+		return false;
 
 	Pasta::Graphic * g = ctx->gfx;
 	g->pushContext();
@@ -267,7 +269,6 @@ void Sprite::drawCleanup(rs::GfxContext* ctx) {
 	Pasta::Graphic * g = ctx->gfx;
 	g->setVertexDeclaration(0);
 	g->setTexture(Pasta::ShaderStage::Fragment, 0, NULL);
-	
 	g->popContext();
 }
 
@@ -304,11 +305,34 @@ void r2::Sprite::applyDepth(rs::GfxContext* ctx) {
 	}
 }
 
+void Sprite::drawFilteringResult(rs::GfxContext* ctx) {
+    r2::Tile* t = filter->getResult();
+    if (!t) return;
+
+    //g->ensureConsistency();
+
+    r2::ImSprite spr(this);
+    spr.tile = t;
+    spr.color.a *= ctx->alpha.back();
+
+	if (filter->shouldForceAlpha())
+		spr.color.a *= alpha;
+
+	// We apply the same Z positionning as the **parent**, the children will be flatten to the parent z position
+	// Because most of the filters use cases are for either single object or flat objects this behavior solve most of the positionning issues
+	// TODO: This works correctly only in single buffer because we base our offset on the current local bound, to fix
+    float h = getMyLocalBounds().height() / scaleY;
+    float zSlope = (zTopOffset - zBottomOffset) / h;
+    spr.zOffsetTop += filter->getPadding() * zSlope;
+    spr.zOffsetBottom -= (t->height - filter->getPadding() - h) * zSlope;
+
+    Im::draw(ctx, spr);
+}
 
 Node * r2::Sprite::clone(Node * n){
 	if (!n) n = new Sprite();
 	Sprite * s = dynamic_cast<Sprite*>(n);
-	SUPER::clone(n);
+	Super::clone(n);
 
 	s->forceBasicPass = forceBasicPass;
 	s->useExtraPass = useExtraPass;
@@ -342,13 +366,13 @@ double Sprite::getValue(TVar valType){
 		case VScale:
 		case VWidth:
 		case VHeight:
-						return SUPER::getValue(valType);
+		case VAlpha:
+						return Super::getValue(valType);
 
 		case VR:		return color.r;
 		case VG:		return color.g;
 		case VB:		return color.b;
 		case VA:		return color.a;
-		case VAlpha:		return alpha;
 
 		case VVisibility:	return (visible) ? 1.0 : 0.0;
 
@@ -374,14 +398,14 @@ double Sprite::setValue(TVar valType, double val){
 		case VScale:
 		case VWidth:
 		case VHeight:
-						return SUPER::setValue(valType,val);
+		case VAlpha:
+						return Super::setValue(valType,val);
 
 		case VR:		return color.r	= val;
 		case VG:		return color.g	= val;
 		case VB:		return color.b	= val;
 		case VA:		return color.a	= val;
 
-		case VAlpha:		return alpha	= val;
 		case VVisibility:	return visible = (val >= 0.999) ? true : false;
 
 		case VCustom0:	return vcustom0	= val;
@@ -418,15 +442,13 @@ bool _currentVertexDeclHasColors(Pasta::Graphic * g)
 }
 
 void r2::Sprite::setShaderParam(const std::string & name, int val) {
-	rd::Anon * v = new rd::Anon();
-	v->name = name;
+	rd::Anon * v = rd::Anon::fromPool(name.c_str());
 	v->mkInt(val);
 	addShaderParam(v);
 }
 
 void r2::Sprite::setShaderParam(const std::string & name, float val) {
-	rd::Anon * v = new rd::Anon();
-	v->name = name;
+	rd::Anon* v = rd::Anon::fromPool(name.c_str());
 	v->mkFloat(val);
 	addShaderParam(v);
 }
@@ -437,8 +459,7 @@ void r2::Sprite::updateShaderParam(const std::string & name, float val) {
 	if (prm)
 		prm->setFloat(val);
 	else {
-		rd::Anon * v = new rd::Anon();
-		v->name = name;
+		rd::Anon* v = rd::Anon::fromPool(name.c_str());
 		v->mkFloat(val);
 		addShaderParam(v);
 	}
@@ -466,8 +487,7 @@ void r2::Sprite::updateShaderParam(const char* name, float val){
 	if (prm)
 		prm->setFloat(val);
 	else {
-		rd::Anon* v = new rd::Anon();
-		v->name = name;
+		rd::Anon* v = rd::Anon::fromPool(name);
 		v->mkFloat(val);
 		addShaderParam(v);
 	}
@@ -479,8 +499,7 @@ void r2::Sprite::updateShaderParam(const char* name, const float* buf, int nbFlo
 	if (prm)
 		prm->setFloatBuffer(buf, nbFloats);
 	else {
-		rd::Anon* v = new rd::Anon();
-		v->name = name;
+		rd::Anon* v = rd::Anon::fromPool(name);
 		v->mkFloatBuffer(buf, nbFloats);
 		addShaderParam(v);
 	}
@@ -495,8 +514,7 @@ void r2::Sprite::setShaderParam(const char * name, const float* buf, int nbFloat
 		mkUber();
 	Anon* prm = getShaderParam(name);
 	if (prm) removeShaderParam(name);
-	rd::Anon* v = new rd::Anon();
-	v->name = name;
+	rd::Anon* v = rd::Anon::fromPool(name);
 	v->mkFloatBuffer(buf, nbFloats);
 	addShaderParam(v);
 }
@@ -507,8 +525,7 @@ void r2::Sprite::setShaderParam(const std::string & name, const float * buf, int
 
 	Anon * prm = getShaderParam(name);
 	if (prm) removeShaderParam(name);
-	rd::Anon * v = new rd::Anon();
-	v->name = name;
+	rd::Anon * v = rd::Anon::fromPool(name.c_str());
 	v->mkFloatBuffer(buf, nbFloats);
 	addShaderParam(v);
 }
@@ -549,9 +566,7 @@ void r2::Sprite::mkClassic() {
 
 void r2::Sprite::mkUber(){
 	if (shader == Shader::SH_Uber) return;
-
 	shader = Shader::SH_Uber;
-	// maybe cleanup shaderValues?
 }
 
 rd::Anon * r2::Sprite::getShaderParam(const char * str) {
@@ -653,7 +668,7 @@ void r2::Sprite::bindShader(rs::GfxContext* ctx) {
 		param->setValue(c.ptr());
 	}
 
-	if (shader == Shader::SH_Basic && !overrideShader) {
+	if ((shader == Shader::SH_Basic && !overrideShader) || (ctx->currentPass == Pass::Picking)) {
 		g->setShader(sh);
 		return;
 	}
@@ -663,7 +678,7 @@ void r2::Sprite::bindShader(rs::GfxContext* ctx) {
 		if (p) p->setValue(mat.transpose(), Pasta::ArrayLayout::AL_COLUMN_MAJOR);
 	}
 
-	r2::Lib::applyShaderValues(g, sh, shaderValues);
+	r2::Lib::applyShaderValues(ctx, sh, shaderValues);
 
 	if (shader == Shader::SH_Uber && !overrideShader) {
 		bool isBlur = shaderFlags & UberShaderFlags::USF_Gaussian_Blur;
@@ -719,22 +734,32 @@ void r2::Sprite::setShaderTimeOffset(float f){
 	shaderValues.set("uTimeOffset", f);
 }
 
-void Sprite::drawFilteringResult(rs::GfxContext* ctx) {
-	r2::Tile * t = filter->getResult();
-	if (!t) return;
-
-	//g->ensureConsistency();
-
-	r2::ImSprite spr(this);
-	spr.depthRead = false;
-	spr.tile = t;
-	spr.color.a *= ctx->alpha.back();
-	Im::draw(ctx, spr);
-}
-
 void Sprite::blendAdd() {
 	blendmode = Pasta::TT_ADD;
 }
 
-#undef SUPER
+void Sprite::blendAlpha() {
+	blendmode = Pasta::TT_ALPHA;
+}
+
+void Sprite::blendOpaque() {
+	blendmode = Pasta::TT_OPAQUE;
+}
+
+void Sprite::blendAlphaMultiply() {
+	blendmode = Pasta::TT_ALPHA_MULTIPLY;
+}
+
+void Sprite::blendMultiply() {
+	blendmode = Pasta::TT_MULTIPLY;
+}
+
+
+void r2::Sprite::texFilterLinear() {
+	texFiltering = TF_LINEAR;
+}
+
+void r2::Sprite::texFilterNearest() {
+	texFiltering = TF_NEAREST;
+}
 

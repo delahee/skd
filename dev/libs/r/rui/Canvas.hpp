@@ -1,6 +1,7 @@
 #pragma once
 
 #include "r2/Node.hpp"
+#include "rd/Dir.hpp"
 #include "rui/Dock.hpp"
 #include "rs/Display.hpp"
 
@@ -36,13 +37,13 @@ namespace rui {
 		inline float							w() { return getActualSize().x; };
 		inline float							h() { return fallbackRefSize.y; };
 
-		r2::Node*								dock(r2::Node* spr, r::DIRECTION dir, float ofs = 0);
-		r2::Node*								dock(r2::Node* spr, r::DIRECTION dir, Vector2 ofs);
+		r2::Node*								dock(r2::Node* spr, rd::Dir dir, float ofs = 0);
+		r2::Node*								dock(r2::Node* spr, rd::Dir dir, Vector2 ofs);
 
 		//don't suscribe to heavy resize for quick patching
-		r2::Node*								dockOnce(r2::Node* spr, r::DIRECTION dir, Vector2 ofs);
-		inline r2::Node*						dockUp(r2::Node* spr, float ofs = 0) { dock(spr, r::DIRECTION(r::DIRECTION::UP | r::DIRECTION::LEFT_RIGHT), ofs); return spr; };
-		inline r2::Node*						dockLeft(r2::Node* spr, float ofs = 0) { dock(spr, r::DIRECTION(r::DIRECTION::LEFT | r::DIRECTION::UP_DOWN), ofs); return spr; };
+		r2::Node*								dockOnce(r2::Node* spr, rd::Dir dir, Vector2 ofs);
+		inline r2::Node*						dockUp(r2::Node* spr, float ofs = 0) { dock(spr, rd::Dir(rd::Dir::UP | rd::Dir::LEFT_RIGHT), ofs); return spr; };
+		inline r2::Node*						dockLeft(r2::Node* spr, float ofs = 0) { dock(spr, rd::Dir(rd::Dir::LEFT | rd::Dir::UP_DOWN), ofs); return spr; };
 
 		virtual void							runAndRegResize(std::function<void(void)>);
 

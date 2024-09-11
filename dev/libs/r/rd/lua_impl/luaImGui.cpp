@@ -7,23 +7,26 @@ using namespace r2;
 using namespace rd;
 using namespace Pasta;
 
+#include "rd/PointerWrapper.hpp"
+
+#ifndef HBC_NO_LUA_IMGUI
 void LuaScriptHost::injectImGui(sol::state & luaSol) {
 	auto imguiLua = luaSol["ImGui"].get_or_create<sol::table>();
 
 #pragma region REGION: Add wrapper around raw pointer for base type	
-	luaSol.new_usertype<PointerWrapper<char>>("CharBuffer",
-		sol::constructors<PointerWrapper<char>(), PointerWrapper<char>(int)>(),
-		"GetPtr", &PointerWrapper<char>::GetPtr,
-		"GetVoidPtr", &PointerWrapper<char>::GetVoidPtr,
-		"GetSize", &PointerWrapper<char>::GetSize,
-		"GetAt", &PointerWrapper<char>::GetAt,
-		"SetAt", &PointerWrapper<char>::SetAt,
+	luaSol.new_usertype<PointerWrapperChar>("CharBuffer",
+		sol::constructors<PointerWrapperChar(), PointerWrapperChar(int)>(),
+		"GetPtr", &PointerWrapperChar::GetPtr,
+		"GetVoidPtr", &PointerWrapperChar::GetVoidPtr,
+		"GetSize", &PointerWrapperChar::GetSize,
+		"GetAt", &PointerWrapperChar::GetAt,
+		"SetAt", &PointerWrapperChar::SetAt,
 		"MemSet", sol::overload(
-			sol::resolve<void(char)>(&PointerWrapper<char>::MemSet),
-			sol::resolve<void(char, int)>(&PointerWrapper<char>::MemSet)
+			sol::resolve<void(char)>(&PointerWrapperChar::MemSet),
+			sol::resolve<void(char, int)>(&PointerWrapperChar::MemSet)
 		),
-		"MemCpy", &PointerWrapper<char>::MemCpy,
-		"StrCpy", &PointerWrapper<char>::StrCpy
+		"MemCpy", &PointerWrapperChar::MemCpy,
+		"StrCpy", &PointerWrapperChar::StrCpy
 		);
 	luaSol.new_usertype<PointerWrapper<float>>("FloatPtr",
 		sol::constructors<PointerWrapper<float>(), PointerWrapper<float>(int)>(),
@@ -89,7 +92,14 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 		"GetVoidPtr", &PointerWrapper<r::Color>::GetVoidPtr,
 		"Get", &PointerWrapper<r::Color>::Get,
 		"Set", &PointerWrapper<r::Color>::Set
-		);
+	);
+	luaSol.new_usertype<PointerWrapper<rd::Vars>>("VarsPtr",
+		sol::constructors<PointerWrapper<rd::Vars>()>(),
+		"GetPtr", &PointerWrapper<rd::Vars>::GetPtr,
+		"GetVoidPtr", &PointerWrapper<rd::Vars>::GetVoidPtr,
+		"Get", &PointerWrapper<rd::Vars>::Get,
+		"Set", &PointerWrapper<rd::Vars>::Set
+	);
 #pragma endregion
 
 #pragma region [TODO] REGION: Add ImGui types & enums
@@ -149,7 +159,7 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 	imguiLua["ImGuiInputTextFlags_AllowTabInput"] = ImGuiInputTextFlags_AllowTabInput;
 	imguiLua["ImGuiInputTextFlags_CtrlEnterForNewLine"] = ImGuiInputTextFlags_CtrlEnterForNewLine;
 	imguiLua["ImGuiInputTextFlags_NoHorizontalScroll"] = ImGuiInputTextFlags_NoHorizontalScroll;
-	//imguiLua["ImGuiInputTextFlags_AlwaysInsertMode"] = ImGuiInputTextFlags_AlwaysInsertMode;
+	imguiLua["ImGuiInputTextFlags_AlwaysOverwrite"] = ImGuiInputTextFlags_AlwaysOverwrite;
 	imguiLua["ImGuiInputTextFlags_ReadOnly"] = ImGuiInputTextFlags_ReadOnly;
 	imguiLua["ImGuiInputTextFlags_Password"] = ImGuiInputTextFlags_Password;
 	imguiLua["ImGuiInputTextFlags_NoUndoRedo"] = ImGuiInputTextFlags_NoUndoRedo;
@@ -239,7 +249,7 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 	imguiLua["ImGuiColorEditFlags_PickerHueWheel"] = ImGuiColorEditFlags_PickerHueWheel;
 	imguiLua["ImGuiColorEditFlags_InputRGB"] = ImGuiColorEditFlags_InputRGB;
 	imguiLua["ImGuiColorEditFlags_InputHSV"] = ImGuiColorEditFlags_InputHSV;
-	imguiLua["ImGuiColorEditFlags__OptionsDefault"] = ImGuiColorEditFlags__OptionsDefault;
+	imguiLua["ImGuiColorEditFlags_DefaultOptions_"] = ImGuiColorEditFlags_DefaultOptions_;
 
 	imguiLua["ImGuiMouseButton_Left"] = ImGuiMouseButton_Left;
 	imguiLua["ImGuiMouseButton_Right"] = ImGuiMouseButton_Right;
@@ -349,9 +359,7 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 #pragma endregion
 
 #pragma region [DONE] REGION: Cursor / Layout
-	imguiLua.set_function("Separator", sol::overload(
-		[]() { return ImGui::Separator(); } //,[](int flags) { return  ImGui::Separator(flags); }
-	));
+	imguiLua.set_function("Separator", ImGui::Separator);
 	imguiLua.set_function("SameLine", sol::overload(
 		[]() { return ImGui::SameLine(); },
 		[](float offset_from_start_x) { return ImGui::SameLine(offset_from_start_x); },
@@ -719,7 +727,6 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 		[](const void* ptr_id, ImGuiTreeNodeFlags flags, const char* fmt) { return ImGui::TreeNodeEx(ptr_id, flags, fmt); }
 	));
 	imguiLua.set_function("TreePush", sol::overload(
-		[]() { return ImGui::TreePush(); },
 		[](const char* str_id) { return ImGui::TreePush(str_id); },
 		[](const void* ptr_id) { return ImGui::TreePush(ptr_id); }
 	));
@@ -748,18 +755,7 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 	));
 #pragma endregion
 
-#pragma region [DONE] REGION: Widgets - List Boxes		[TODO: Maybe add items_getter]
-	imguiLua.set_function("ListBox", sol::overload(
-		[](const char* label, int* current_item, void* items, int items_count) { return ImGui::ListBox(label, current_item, (char**)items, items_count); },
-		[](const char* label, int* current_item, void* items, int items_count, int height_in_items) { return ImGui::ListBox(label, current_item, (char**)items, items_count, height_in_items); }
-	));
-	imguiLua.set_function("ListBoxHeader", sol::overload(
-		[](const char* label) { return ImGui::ListBoxHeader(label); },
-		[](const char* label, const ImVec2& size) { return ImGui::ListBoxHeader(label, size); },
-		[](const char* label, int items_count) { return ImGui::ListBoxHeader(label, items_count); },
-		[](const char* label, int items_count, int height_in_items) { return ImGui::ListBoxHeader(label, items_count, height_in_items); }
-	));
-	imguiLua.set_function("ListBoxFooter", ImGui::ListBoxFooter);
+#pragma region [TODO] REGION: Widgets - List Boxes
 #pragma endregion
 
 #pragma region [DONE] REGION: Widgets - Data Plotting	[TODO: Maybe add void* variant with values_getter callback]
@@ -820,7 +816,12 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 #pragma endregion
 
 #pragma region [DONE] REGION: Popups, Modals
-	imguiLua.set_function("OpenPopup", ImGui::OpenPopup);
+  imguiLua.set_function("OpenPopup", sol::overload(
+    [](const char* str_id) { return ImGui::OpenPopup(str_id); },
+    [](const char* str_id, ImGuiPopupFlags popup_flags) { return ImGui::OpenPopup(str_id, popup_flags); },
+    [](ImGuiID id) { return ImGui::OpenPopup(id); },
+    [](ImGuiID id, ImGuiPopupFlags popup_flags) { return ImGui::OpenPopup(id, popup_flags); }
+  ));
 	imguiLua.set_function("BeginPopup", sol::overload(
 		[](const char* str_id) { return ImGui::BeginPopup(str_id); },
 		[](const char* str_id, ImGuiWindowFlags flags) { return ImGui::BeginPopup(str_id, flags); }
@@ -886,5 +887,13 @@ void LuaScriptHost::injectImGui(sol::state & luaSol) {
 	));
 #pragma endregion
 
+	imguiLua.set_function("Warning", sol::resolve<void(const char*)>(&ImGui::Warning));
+	imguiLua.set_function("Error", sol::resolve<void(const char*)>(&ImGui::Error));
+	
+
 	//TODO Utilities
 }
+#else
+void LuaScriptHost::injectImGui(sol::state& luaSol) {
+}
+#endif

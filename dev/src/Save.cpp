@@ -1,4 +1,7 @@
 #include "stdafx.h"
+#include <functional>
+#include <string>
+#include <vector>
 
 #include "4-ecs/JsonReflect.h"
 #include "1-files/PersistentMgr.h"
@@ -14,6 +17,10 @@
 #include "rs/File.hpp"
 
 #include "Save.hpp"
+
+using namespace std;
+using namespace std::literals;
+
 
 Profile*	Profile::me = 0;
 Progress*	Progress::me = 0;
@@ -33,16 +40,16 @@ void Pasta::JReflect::visit(StubVec&, const char* name) {
 }
 
 
-string					Save::folder = "hbc/dt";
+std::string					Save::folder = "hbc/dt";
 #ifdef PASTA_FINAL
-string					Save::filePrefix = "app_f_";
+std::string					Save::filePrefix = "app_f_";
 #else
-string					Save::filePrefix = "app_d_";
+std::string					Save::filePrefix = "app_d_";
 #endif
-string					Save::fileExt = ".sav";
+std::string					Save::fileExt = ".sav";
 
-string					Save::appDataDir = "";
-string					Save::localDataDir = "";
+std::string					Save::appDataDir = "";
+std::string					Save::localDataDir = "";
 
 std::function<void(Profile*)>	Save::createInitialProfile;
 std::function<void(LocalPref*)> Save::createInitialPrefs;
@@ -71,8 +78,6 @@ Save& Save::get(){
 Profile::Profile() {
 	progress = new Progress();
 }
-
-
 
 void Progress::serialize(Pasta::JReflect& jr, const char* _name){
 	if (_name) jr.visitObjectBegin(_name);
@@ -107,7 +112,7 @@ void Progress::completeLevel(const char* label) {
 	data.set( (Str256("complete_")+label).c_str(), WorldCompletion::COMPLETED);
 }
 
-void Profile::im() {
+bool Profile::im() {
 	using namespace ImGui;
 	LabelText("name", name.c_str() );
 	Value("dirty",dirty);
@@ -120,6 +125,7 @@ void Profile::im() {
 		progress->im();
 		TreePop();
 	}
+	return false;
 }
 
 void Progress::im() {
@@ -226,8 +232,8 @@ LocalPref* Save::openLocalPrefsSync(){
 	if(cachedPrefs) return cachedPrefs;
 
 	cachedPrefs = new LocalPref();
-	string path = localDataDir + "/hbc/dt/localprefs.json";
-	string content;
+	std::string path = localDataDir + "/hbc/dt/localprefs.json";
+	std::string content;
 	bool fileRead = rs::File::read(path,content);
 	if (!fileRead) {
 		cout << "cannot open pp : creating them"<<endl;
@@ -250,11 +256,11 @@ Promise* Save::saveLocalPrefs() {
 	if (!cachedPrefs) return Promise::getFailure("no player prefs cached to save");
 
 	auto mgr = Pasta::FileMgr::getSingleton();
-	string dir = localDataDir + "/hbc/dt/";
+	std::string dir = localDataDir + "/hbc/dt/";
 	bool dok0 = rs::File::createDir(localDataDir+"/hbc");
 	bool dok1 = rs::File::createDir(localDataDir+"/hbc/dt");
-	string path = dir + "localprefs.json";
-	string content = jSerializeToString(*cachedPrefs);
+	std::string path = dir + "localprefs.json";
+	std::string content = jSerializeToString(*cachedPrefs);
 	bool fok = rs::File::write(path, content);
 	return fok ? Promise::getSuccess(string("saved")):Promise::getFailure(string("error"));
 }
@@ -311,7 +317,7 @@ Promise* Save::openProfile(const string & name){
 		Profile* prof = new Profile();
 		prof->name = name;
 		openedProfile = prof;
-		string content;
+		std::string content;
 		bool ok = rs::File::readSaveFile(openedProfile->name,content);
 		if (!ok) {
 			openedProfile = nullptr;

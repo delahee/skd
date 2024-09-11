@@ -9,9 +9,8 @@ eastl::vector<Promise*> rd::Promise::deleteList;
 
 static bool init = false;
 static void promiseInit() {
-	auto ap = new AnonAgent(Promise::exitFrame);
+	auto ap = new AnonAgent(Promise::exitFrame, &rs::Sys::exitFrameProcesses);
 	ap->name = "Promise GC";
-	rs::Sys::exitFrameProcesses.push_back(ap);
 }
 
 Promise::Promise() {

@@ -22,6 +22,7 @@
     - email    : powturbo [_AT_] gmail [_DOT_] com
 **/
 //      time_.h : parameter free high precision time/benchmark functions
+#pragma once
 #include <time.h>
 #include <float.h>
 

@@ -1,3 +1,4 @@
+#pragma once
 #include "BulletDynamics/Dynamics/btDiscreteDynamicsWorld.cpp"
 #include "BulletDynamics/Dynamics/btRigidBody.cpp"
 #include "BulletDynamics/Dynamics/btSimulationIslandManagerMt.cpp"

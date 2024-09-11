@@ -8,22 +8,21 @@
 namespace rd {
 	class AudioEmitter2D : public r2::Node {
 	public:
-							AudioEmitter2D(r2::Node*p=0);
-		virtual				~AudioEmitter2D();
-
+										AudioEmitter2D(r2::Node*p=0);
+		virtual							~AudioEmitter2D();
 		FMOD::Studio::EventDescription*	eventDesc = 0;
 		FMOD::Studio::EventInstance*	eventInstance = 0;
 		bool							eventPickerOpened = false;
-		std::string						event;
-		std::string						bank;
-		std::string						error;
+		bool							showEmitterDebugDraw = true;
 		float							pitch = 1.0f;
 		float							volume = 1.0f;
 		float							directionYaw = 0.0f;
 		r::Vector3						velocity;
 		r::Vector3						forward = r::Vector3(0, 1, 0);
 		r::Vector3						up = r::Vector3(0, 0, 1);
-		bool							showEmitterDebugDraw = true;
+		Str								event;
+		Str								bank;
+		Str								error;
 		std::vector<std::pair<FMOD_STUDIO_PARAMETER_DESCRIPTION, float>>
 			params;
 

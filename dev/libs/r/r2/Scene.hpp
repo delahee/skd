@@ -9,23 +9,21 @@
 #include "rd/Agent.hpp"
 #include <vector>
 
-using namespace rs;
-
 typedef std::function<void(Pasta::Graphic * g)> RenderOp;
 typedef std::function<void(rs::GfxContext * g)> RenderOpCtx;
 typedef std::function<void(double dt)> UpdateOp;
 
 namespace r2 {
-	
 	class Scene;
-
+	class Node;
 	struct InputDep {
 		r2::Scene*	sc;
 		bool		before = true;
 	};
 
 	//warning don't try to "filter" a scene, this is evil, please use a capture to perform this form of dark art
-	class Scene : public Node, public IEventListener {
+	class Scene : public Node, public rs::IEventListener {
+		typedef r2::Node Super;
 	public:
 		
 		bool							fixedSize = false;
@@ -58,13 +56,13 @@ namespace r2 {
 		//camera depth now goes from - 1/factor to 1/factor
 		void							setDepthScale(float factor);
 
-		static const int VCamPosX		= VCustom0;
-		static const int VCamPosY		= VCustom1;
-		static const int VCamPosZ		= VCustom2;
+		static const int VCamPosX		= rs::VCustom0;
+		static const int VCamPosY		= rs::VCustom1;
+		static const int VCamPosZ		= rs::VCustom2;
 
-		static const int VCamScaleX		= VCustom3;
-		static const int VCamScaleY		= VCustom4;
-		static const int VCamScaleZ		= VCustom5;
+		static const int VCamScaleX		= rs::VCustom3;
+		static const int VCamScaleY		= rs::VCustom4;
+		static const int VCamScaleZ		= rs::VCustom5;
 
 		virtual double					getValue(rs::TVar valType) override;
 		virtual double					setValue(rs::TVar valType, double val) override;
@@ -95,7 +93,7 @@ namespace r2 {
 		/**
 		* Beware this function is general purpose, it does not set scissoring
 		*/
-		void							drawInto(rs::GfxContext * _g, r2::Node * node, Pasta::Texture * t, Pasta::FrameBuffer * fb = nullptr, rs::Pass pass = Pass::Basic);
+		void							drawInto(rs::GfxContext * _g, r2::Node * node, Pasta::Texture * t, Pasta::FrameBuffer * fb = nullptr, rs::Pass pass = rs::Pass::Basic);
 
 		virtual rs::InputEvent			transformEvent(rs::InputEvent& ev);
 		virtual bool					handleEvent(rs::InputEvent & ev);
@@ -116,14 +114,15 @@ namespace r2 {
 		* setup the new
 		* triggers the focus event
 		*/
-		void								setCurrentFocus(r2::Interact * inter, bool triggerCbk = true);
+		void								setCurrentFocus(r2::Interact * inter);
+		void								setCurrentFocus(r2::Interact * inter, const rs::InputEvent & src);
 
 		/*
 		* cancels olds over via event
 		* setup the new
 		* triggers the out event
 		*/
-		void								setCurrentOver(r2::Interact * inter, bool triggerCbk=true);
+		void								setCurrentOver(r2::Interact * inter);
 
 		virtual void						im() override;
 		
@@ -133,7 +132,6 @@ namespace r2 {
 		bool								areDimensionsOverriden = false;
 		float								sceneWidth = 0.0;
 		float								sceneHeight = 0.0;
-		Node*								getByName(const std::string & name);
 
 		r2::InputDep&						registerInputDependency(r2::Scene * sc);
 		void								unregisterInputDependency(r2::Scene * sc);
@@ -146,12 +144,14 @@ namespace r2 {
 		std::vector<RenderOpCtx>			postClearRenderOps;
 		std::vector<RenderOpCtx>			postRenderOps;
 
-		AgentList							al;
+		rd::AgentList						al;
 
 		virtual void						serialize(Pasta::JReflect & jr, const char * _name = nullptr) override;
 
 		virtual	NodeType					getType() const override { return NodeType::NT_SCENE; };
 
+		//because view matrix can change during rendering because of filter and scene reinjections
+		virtual Matrix44					getCanonicalViewMatrix() const;
 		const Matrix44&						getViewMatrix() const { return viewMatrix; };
 
 		bool								DEBUG_EVENT = false;
@@ -160,8 +160,8 @@ namespace r2 {
 		r2::Interact *						currentFocus = nullptr;
 		r2::Interact *						currentOver = nullptr;
 
-		virtual void						onEvent( InputEvent & ev ) override;
-		std::vector<InputEvent>				pendingEvents;
+		virtual void						onEvent(rs::InputEvent & ev ) override;
+		std::vector<rs::InputEvent>			pendingEvents;
 		std::vector<InputDep>				deps;
 
 

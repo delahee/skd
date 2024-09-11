@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Node.hpp"
+#include "NodeAgent.hpp"
 #include "Scene.hpp"
 #include "Bounds.hpp"
 #include "../rs/ITweenable.hpp"
@@ -25,13 +26,19 @@ Node::Node(Node* p) : parent(p) {
 		parent->addChild(this);
 
 	uid = rs::Sys::getUID();
+	trsDirty = true;
 
-#ifdef _DEBUG
-	name = "Node#" + std::to_string(uid);
-#endif
+	setName( "Node" );
 }
 
 Node::~Node() {
+	//traceNode("~node",this);
+	if (nodeFlags & NF_ENGINE_DOCKED) {
+		traceNode("~node suspicious docking flags should have been ::destroy()'ed not brutally deleted", this);
+		#ifdef _DEBUG
+		assert(false);
+		#endif	
+	}
 	if (sigOnResize) {
 		delete sigOnResize;
 		sigOnResize = nullptr;
@@ -42,6 +49,10 @@ Node::~Node() {
 }
 
 Node* Node::dummy = new Node(nullptr);
+
+
+void Node::setUniformScale(double x) { this->scaleX = x; this->scaleY = x; this->trsDirty = true; };
+
 
 //the full glyphs size whereas getSize() will ignore the pixels under the baseline.
 Pasta::Vector2 r2::Node::localToGlobal(Pasta::Vector2 pt) {
@@ -88,6 +99,9 @@ Bounds r2::Node::getMeasures(bool forFilters) {
 	for (auto it = children.begin(); it != children.end(); it++) {
 		if (*it) {
 			Node* n = (*it);
+			if (!n->visible) continue;
+			if (n->nodeFlags & NF_SKIP_MEASURES_FOR_BOUNDS) continue;
+
 			Bounds b = n->getMeasures(forFilters);
 			if (!b.isEmpty()) {
 				b.transform(mat);
@@ -152,38 +166,43 @@ void r2::Node::traverse(std::function< void(r2::Node*)> visit) {
 
 void r2::Node::_traverse(std::function< void(r2::Node*)>& visit) {
 	visit(this);
-	for (auto it = children.begin(); it != children.end(); ++it) {
+	for (auto it = children.begin(); it != children.end(); ++it) 
 		(*it)->traverse(visit);
-	}
 }
 
 void r2::Node::traverseLastChildFirst(std::function<void(r2::Node*)>& visit) {
-	for (auto it = children.rbegin(); it != children.rend(); ++it) {
+	for (auto it = children.rbegin(); it != children.rend(); ++it) 
 		(*it)->traverseLastChildFirst(visit);
-	}
 	visit(this);
 }
 
+void r2::Node::setName(const char* n){
+	name = n;
+	if (!rd::String::contains(name, '#')) 
+		name = Str256f( "%s#%ld",name.c_str(), uid);
+}
 
 Node* r2::Node::findByName(const char* name) {
-	if (StrRef(this->name) == StrRef(name))
+	if (this->name == StrRef(name))
 		return this;
-	for (auto it = children.begin(); it != children.end(); it++) {
-		if (*it) {
-			Node* n = (*it)->findByName(name);
-			if (n)  return n;
+	for (auto c: children) {
+		if (c) {
+			Node* n = c->findByName(name);
+			if (n) 
+				return n;
 		}
 	}
 	return nullptr;
 }
 
-Node* r2::Node::findByName(const std::string& name) {
-	if (this->name == name)
+r2::Node* r2::Node::findByTag(const char* tag){
+	if (vars.hasTag(tag))
 		return this;
-	for (auto it = children.begin(); it != children.end(); it++) {
-		if (*it) {
-			Node* n = (*it)->findByName(name);
-			if (n)  return n;
+	for (auto c : children) {
+		if (c) {
+			Node* n = c->findByTag(tag);
+			if (n) 
+				return n;
 		}
 	}
 	return nullptr;
@@ -198,15 +217,25 @@ void r2::Node::findByUID(r::u64 uid, r2::Node*& node, r2::BatchElem*& elem) {
 		return;
 	}
 
-	for (auto it = children.begin(); it != children.end(); it++) {
-		if (*it) {
-			(*it)->findByUID(uid, node, elem);
-			if (node) return;
-			if (elem) return;
+	for (auto c : children) {
+		if (c) {
+			c->findByUID(uid, node, elem);
+			if (node) 
+				return;
+			if (elem) 
+				return;
 		}
 	}
 }
 
+r2::Node* r2::Node::find(std::function<bool(r2::Node* n)> f) {
+	if (f(this))
+		return this;
+	for (auto c : children) 
+		if (f(c)) 
+			return c;
+	return nullptr;
+}
 
 r2::Node* r2::Node::findByUID(r::u64 uid) {
 	if (!uid) return nullptr;
@@ -221,7 +250,6 @@ r2::Node* r2::Node::findByUID(r::u64 uid) {
 	}
 	return nullptr;
 }
-
 
 void r2::Node::destroyAllChildren() {
 	while (children.size()) {
@@ -260,8 +288,9 @@ void r2::Node::removeAllChildren() {
 }
 
 void r2::Node::reset() {
+	setName("Node");
+	nodeFlags = nodeFlags & (NodeFlags::NF_IN_POOL | NodeFlags::NF_ORIGINATES_FROM_POOL | NodeFlags::NF_CUSTOM_POOLING);
 	destroyAllChildren();
-	name = "";
 	alpha = 1.0f;
 	resetTRS();
 	visible = true;
@@ -269,7 +298,9 @@ void r2::Node::reset() {
 	onDestruction.clear();
 	if(sigOnResize) sigOnResize->clear();
 	trsDirty = true;
+	syncAllMatrix();
 	bhv = {};
+	vars.dispose();
 };
 
 TRS r2::Node::getTRS() {
@@ -290,6 +321,16 @@ void r2::Node::resetTRS() {
 
 	trsDirty = true;
 	syncMatrix();
+}
+
+void r2::Node::invalidateTRS(){
+	//send the node to hell so that it does not pollute anything
+	double hell = -66 * 1024 * 1024;
+	x = hell; y = hell; z = hell;
+	scaleY = scaleX = 0.0f;
+	rotation = 0;
+
+	trsDirty = true;
 }
 
 void r2::Node::setTRS(double x, double y, double scaleX, double scaleY, double rotation, double z) {
@@ -323,6 +364,7 @@ r2::Node* r2::Node::clone(r2::Node* n) {
 	if (n == nullptr)
 		n = new Node();
 	n->name = name;
+    n->nodeFlags |= nodeFlags & (NF_DRAW_CHILDREN_FIRST | NF_SKIP_DRAW | NF_SKIP_HIERACHICAL_ALPHA);
 	n->setTRS(getTRS());
 	n->bhv = bhv;
 	if (filter)
@@ -362,14 +404,15 @@ Vector2 r2::Node::getPos() {
 
 void Node::syncChildrenMatrix() {
 	for (auto c = children.begin(); c != children.end(); c++) {
-		(*c)->trsDirty = true;
-		(*c)->syncMatrix();
+		auto n = *c;
+		n->trsDirty = true;
+		n->syncMatrix();
 	}
 }
 
 
 void Node::syncMatrix() {
-	if (!trsDirty) {//let's save a lot of ifs on doubles if we know answer already
+	if (!trsDirty) {//let's save a lot of ifs on doubles if we know the answer already
 		if (_x != x) { _x = x; trsDirty = true; }
 		if (_y != y) { _y = y; trsDirty = true; }
 
@@ -392,8 +435,8 @@ void Node::syncMatrix() {
 	trsDirty = false;
 }
 
-void Node::syncAllMatrix() {
-	if (trsDirty) {
+void Node::syncAllMatrix( bool force) {
+	if (trsDirty || force) {
 		syncMatrix();
 		for (auto c = children.begin(); c != children.end(); c++)
 			(*c)->syncMatrix();
@@ -409,7 +452,8 @@ Pasta::Matrix44 Node::getLocalMatrix() {
 }
 
 Pasta::Matrix44 Node::getGlobalMatrix() {
-	if (!parent) return getLocalMatrix();
+	if (!parent) 
+		return getLocalMatrix();
 	else {
 		parent->syncMatrix();
 		return parent->mat * getLocalMatrix();
@@ -609,16 +653,18 @@ void Node::update(double dt) {
 
 	syncMatrix();
 
+	if (agl) agl->update(dt);
+
 	for (int i = children.size() - 1; i >= 0; i--) {
 		Node* n = children[i];
 		if (n)
 			n->update(dt);
+		if (children.size() == 0)
+			break;
 	}
 
 	syncMatrix();
 }
-
-
 
 void Node::onResize(const Vector2& _newScreenSize) {
 	if (sigOnResize)
@@ -631,16 +677,21 @@ void Node::onResize(const Vector2& _newScreenSize) {
 }
 
 void Node::dispose() {
-	nodeFlags &= ~NF_UTILITY;
+	//traceNode("dispose::node", this);
+	onDispose();
 
+	nodeFlags &= ~NF_UTILITY;
 	vars.dispose();
 
-	destroyAllChildren();
-
-	if (parent) {
-		parent->removeChild(this);
-		parent = nullptr;
+	if (agl) {
+		auto a = agl;
+		agl = 0;
+		a->safeDestruction();
 	}
+
+	destroyAllChildren();
+	detach();
+
 	if (filter) {
 		delete filter;
 		filter = nullptr;
@@ -652,35 +703,38 @@ void Node::draw(rs::GfxContext* ctx) {
 }
 
 void Node::drawContent(rs::GfxContext* ctx) {
+	bool drawSelf = true;
+	bool drawChildren = true;
+
 	if (!visible) return;
 
 	if (nodeFlags & NF_SKIP_DRAW) return;
-
 	if (!(nodeFlags & NF_SKIP_HIERACHICAL_ALPHA)) 
 		ctx->alpha.push_back(alpha * ctx->alpha.back());
 
-		if (nodeFlags & NF_DRAW_CHILDREN_FIRST) {
-			for (auto it = children.begin(); it != children.end(); it++)
-				if ((*it) && (*it)->visible)
-					(*it)->drawRec(ctx);
-			draw(ctx);
-		} else {
-			draw(ctx);
-			for (auto it = children.begin(); it != children.end(); it++)
-				if ((*it) && (*it)->visible)
-					(*it)->drawRec(ctx);
-		}
+	if ((nodeFlags & NF_ALPHA_UNDER_ZERO_SKIPS_DRAW) && (ctx->alpha.back() <= 0))
+		drawSelf = false;
+
+	if (nodeFlags & NF_DRAW_CHILDREN_FIRST) {
+		if (drawChildren)
+		for (auto it = children.begin(); it != children.end(); it++)
+			if ((*it) && (*it)->visible)
+				(*it)->drawRec(ctx);
+		if(drawSelf) draw(ctx);
+	} else {
+		if (drawSelf) draw(ctx);
+		if(drawChildren)
+		for (auto it = children.begin(); it != children.end(); it++)
+			if ((*it) && (*it)->visible)
+				(*it)->drawRec(ctx);
+	}
 
 	if (!(nodeFlags & NF_SKIP_HIERACHICAL_ALPHA))
 		ctx->alpha.pop_back();
 }
 
 void Node::drawFilteringResult(rs::GfxContext* ctx) {
-	//inquire about this
-	//ctx->gfx->pushContext();
-	//ctx->gfx->setAlpha(alpha * ctx->alpha.back());
 	r2::Im::draw(ctx, mat, filter->getResult());
-	//ctx->gfx->popContext();
 }
 
 void Node::drawFiltered(rs::GfxContext* ctx) {
@@ -690,7 +744,7 @@ void Node::drawFiltered(rs::GfxContext* ctx) {
 	bool hadEarlyDepth = ctx->supportsEarlyDepth;
 	ctx->supportsEarlyDepth = false;
 	{
-		if (filter->shouldComputeFilter())
+		if (filter->shouldComputeFilter()) 
 			filter->compute(ctx, this);
 		if (filter->doRenderToBackbuffer)
 			drawFilteringResult(ctx);
@@ -758,7 +812,11 @@ double r2::Node::setValue(TVar valType, double val) {
 
 	case VWidth:	setWidth(val);			break;
 	case VHeight:	setHeight(val);			break;
-	case VAlpha:	alpha = val;			break;
+	case VAlpha:	
+		alpha = val; 
+		if (alpha < 0) 
+			alpha = 0;	
+		break;
 	default: {
 
 	}
@@ -786,10 +844,12 @@ void r2::Node::drawTo(Pasta::Texture* t, Pasta::FrameBuffer* fb, Scene* _s) {
 }
 
 void r2::Node::toPool() {
-	rd::Pools::free(this);
+	rd::Pools::release(this);
 }
 
 void r2::Node::destroy() {
+	//traceNode("destr::node", this);
+
 	if (nodeFlags & NF_SKIP_DESTRUCTION) return;
 
 	onDestruction.trigger();
@@ -812,9 +872,34 @@ void r2::Node::_collect(r2::Node* tgt, eastl::vector<r2::Node*>* cur) {
 		_collect(c, cur);
 }
 
+void r2::Node::setTag(const char* tag){
+	vars.setTag(tag);
+}
+
+bool r2::Node::hasTag(const char* tag) const{
+	return vars.hasTag(tag);
+}
+
 r2::Node* r2::Node::fromPool(r2::Node * parent){
 	auto n = rd::Pools::nodes.alloc();
 	if (parent)
 		parent->addChild(n);
 	return n;
 }
+
+void r2::Node::addComponent(r2::NodeAgent* a){
+	if (!a) return;
+	if(!agl)
+		agl = new r2::NodeAgentList(this);
+	if (agl) {
+		agl->agents.add(a);
+		a->node = this;
+	}
+}
+
+void r2::Node::setAlpha(float _alpha) {
+	alpha = _alpha;
+}
+
+
+

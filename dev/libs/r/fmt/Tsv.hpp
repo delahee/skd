@@ -1,8 +1,5 @@
 #pragma once
 
-#include <string>
-#include <vector>
-#include <functional>
 #include "rd/Enum.hpp"
 
 namespace fmt{
@@ -28,14 +25,20 @@ public:
 		return ret;
 	}
 
-	static std::vector<Str> parseIdentifierList(std::vector<Str>& line, int idx);
-	static std::vector<Str> parseIdentifierList(std::vector<std::string>& line, int idx);
-	static rd::EnumList		parseEnums(std::vector<std::string>& line, int idx);
-	static rd::Enum			parseEnum(std::vector<std::string>& line, int idx);
-
-	static rd::Vars*		parseVars(const Str& src);
-
-	static rd::Vars*		parseVars(std::vector<std::string>& line, int idx){
+	static double				parsePercent(std::vector<std::string>& line, int idx, double dflt = 0.0);
+	static float				parsePercent(std::vector<std::string>& line, int idx, float dflt = 0.0f);
+	static eastl::vector<Str>	parseIdentifierList(std::vector<Str>& line, int idx);
+	static eastl::vector<Str>	parseIdentifierList(std::vector<std::string>& line, int idx);
+	static eastl::vector<int>	parseIntList(std::vector<std::string>& line, int idx);
+	static eastl::vector<int>	parseIntList(std::vector<std::string>& line, int idx,const char * sep);
+	static rd::EnumList			parseEnums(const char * line, char delim = ' ');
+	static rd::EnumList			parseEnums(std::vector<std::string>& line, int idx, char delim = ' ');
+	static r::Color				parseColor(const char* line);
+	static r::Color				parseColor(std::vector<std::string>& line, int idx);
+	static rd::Enum				parseEnum(std::vector<std::string>& line, int idx);
+	static rd::Enum				parseValidatedEnum(std::vector<std::string>& line, int idx, rd::EnumConstructor * ctors);
+	static rd::Vars*			parseVars(const Str& src);
+	static rd::Vars*			parseVars(std::vector<std::string>& line, int idx){
 		if (idx < 0) return nullptr;
 		auto& p = line[idx];
 		if (p.empty()) return nullptr;
@@ -47,7 +50,13 @@ template<>
 inline std::string	Tsv::parse(std::vector<std::string>& line, int idx, std::string dflt) {
 	if (idx < 0)return dflt;
 	return line[idx];
-}
+};
+
+template<>
+inline Str Tsv::parse(std::vector<std::string>& line, int idx, Str dflt) {
+	if (idx < 0)return dflt;
+	return StrRef(line[idx]);
+};
 
 template<>
 inline const char*	Tsv::parse(std::vector<std::string>& line, int idx, const char* dflt) {
@@ -59,7 +68,19 @@ template<>
 inline int			Tsv::parse(std::vector<std::string>& line, int idx, int dflt) {
 	if (idx < 0)return dflt;
 	int ret = dflt;
-	sscanf(line[idx].data(), "%d", &ret);
+	if (EOF == sscanf(line[idx].data(), "%d", &ret)) 
+		return dflt;
+	return ret;
+}
+
+template<>
+inline r::Color Tsv::parse(std::vector<std::string>& line, int idx, r::Color dflt) {
+	if (idx < 0) return dflt;
+	
+	const char* lit = line[idx].data();
+	r::Color ret = dflt;
+	if (!*lit) return ret;
+	ret = r::Color::stringToColor(lit);
 	return ret;
 }
 

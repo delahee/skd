@@ -18,7 +18,9 @@ namespace r2 {
 
 		inline double* ptr() {
 			return &xMin;
-		}
+		};
+
+		void im();
 
 		Bounds& empty() {
 			xMin = 1e20;
@@ -45,35 +47,35 @@ namespace r2 {
 			return *this;
 		}
 
-		Vector2 getCenter() {
+		Vector2 getCenter() const {
 			return Vector2(getCenterX(), getCenterY());
 		}
 
-		double getCenterX() {
+		double getCenterX() const {
 			return 0.5 * (xMax + xMin);
 		}
 
-		double getCenterY() {
+		double getCenterY() const {
 			return 0.5 * (yMax + yMin);
 		}
 
-		inline double getWidth() {
+		inline double getWidth() const {
 			return std::max(0.0, xMax - xMin);
 		}
 
-		inline double getHeight() {
+		inline double getHeight() const {
 			return std::max(0.0, yMax - yMin);
 		}
 
-		inline double randomX() {
+		inline double randomX()const {
 			return xMin + rs::Sys::randf() * getWidth();
 		}
 
-		inline double randomY() {
+		inline double randomY() const {
 			return yMin + rs::Sys::randf() * getHeight();
 		}
 
-		inline bool isEmpty() {
+		inline bool isEmpty() const {
 			return xMax <= xMin || yMax <= yMin;
 		}
 
@@ -82,6 +84,11 @@ namespace r2 {
 			xMax += dx;
 			yMin += dy;
 			yMax += dy;
+			return *this;
+		}
+
+		inline Bounds& scale(double dx, double dy) {
+			*this = fromCenterSize(getCenterX(), getCenterY(), getWidth() * dx, getHeight() * dy);
 			return *this;
 		}
 
@@ -145,6 +152,19 @@ namespace r2 {
 		Bounds getTransformed(const Pasta::Matrix44& mat) {
 			Bounds b = *this;
 			b.transform(mat);
+			return b;
+		};
+
+		void translate(const vec2& v) {
+			xMin += v.x;
+			xMax += v.x;
+			yMin += v.y;
+			yMax += v.y;
+		};
+
+		Bounds getTranslated(const vec2& v) {
+			Bounds b = *this;
+			b.translate(v);
 			return b;
 		};
 
@@ -247,6 +267,7 @@ namespace r2 {
 		inline r::Vector2 getSize() {
 			return r::Vector2(width(), height());
 		};
+
 	};
 
 	struct BoundsI {
@@ -265,6 +286,8 @@ namespace r2 {
 		inline int* ptr() {
 			return &xMin;
 		}
+
+		void im();
 
 		BoundsI& empty() {
 			xMin = 1 << 28;
@@ -434,25 +457,9 @@ namespace r2 {
 			return !(xMin >= b.xMax || yMin >= b.yMax || xMax <= b.xMin || yMax <= b.yMin);
 		}
 
-		bool testCircle(int px, int py, int r) {
-			int closestX = std::clamp(px, xMin, xMax);
-			int closestY = std::clamp(py, yMin, yMax);
+		bool testCircle(int px, int py, int r);
 
-			int distX = px - closestX;
-			int distY = py - closestY;
-
-			double distSq = distX * distX + distY * distY;
-			return distSq < r* r;
-		}
-
-		static BoundsI fromCenterSize(int x, int y, int w, int h) {
-			BoundsI b;
-			b.xMin = std::lrint(x - w * 0.5);
-			b.yMin = std::lrint(y - w * 0.5);
-			b.xMax = std::lrint(x + w * 0.5);
-			b.yMax = std::lrint(y + h * 0.5);
-			return b;
-		}
+		static BoundsI fromCenterSize(int x, int y, int w, int h);
 
 		static BoundsI fromTLWH(int x, int y, int w, int h) {
 			BoundsI b;

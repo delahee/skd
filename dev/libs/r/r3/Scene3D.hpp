@@ -1,9 +1,9 @@
 #pragma once
-
 #include "r2/Scene.hpp"
 
 namespace r3 {
 	class Scene3D : public r2::Scene {
+		typedef r2::Scene Super;
 	public:
 		r::Vector3	cameraLookAt;
 		r::Vector3	worldUp = r::Vector3(0, -1, 0);
@@ -25,9 +25,11 @@ namespace r3 {
 		// if your object is in screen space, it should stay in its place
 		// if you change persw and persh you can get the perspective to be centered on your object
 
-		Scene3D();
+								Scene3D();
+		virtual					~Scene3D() {};
 		virtual void			update(double dt) override;
 		virtual void			stdMatrix(rs::GfxContext* ctx, int w = -1, int h = -1) override;
+		virtual Matrix44		getCanonicalViewMatrix() const;
 
 		virtual rs::InputEvent	transformEvent(rs::InputEvent& ev) override;
 

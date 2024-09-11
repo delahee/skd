@@ -44,7 +44,7 @@ GAMEApplication::~GAMEApplication(){
 void GAMEApplication::winInit() {
 #ifdef PASTA_WIN
 	wchar_t sep = std::filesystem::path::preferred_separator;
-	wstring p = L"";
+	std::wstring p = L"";
 	p += sep;
 	p += L"hbc";
 	p += sep;

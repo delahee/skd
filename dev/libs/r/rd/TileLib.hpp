@@ -1,13 +1,9 @@
 #pragma once
 
-#include <vector>
-#include <algorithm>
-#include <unordered_map>
-#include "../r2/Rect.hpp"
-#include "../r2/Tile.hpp"
+#include "r2/Rect.hpp"
+#include "r2/Tile.hpp"
 
 #include "IAnimated.hpp"
-#include "1-graphics/Texture.h"
 
 namespace Pasta {
 	struct JReflect;
@@ -40,22 +36,20 @@ namespace rd{
 	};
 
 	struct FrameData {
-		int x					= 0;
-		int y					= 0;
-		int wid					= 0;
-		int hei					= 0;
+		bool	hasPivot = false;
+
+		int		x		= 0;
+		int		y		= 0;
+		int		wid		= 0;
+		int		hei		= 0;
+		int		texSlot	= 0;
+		double	pX		= 0.0;
+		double	pY		= 0.0;
 
 		RealFrame realFrame;
 		r2::Rect rect;
 
-		bool	hasPivot		= false;
-		double	pX				= 0.0;
-		double	pY				= 0.0;
-		int		texSlot			= 0;
-
-		FrameData() {
-		}
-
+		FrameData() {}
 		FrameData(const FrameData &fd) {
 			x = fd.x;
 			y = fd.y;
@@ -77,18 +71,19 @@ namespace rd{
 			return -(realFrame.realHei * pivotRatioY + realFrame.y);
 		};
 
+		void im();
 	};
 
 	class TileGroup {
 	public:
-		std::string				id;
+		Str						id;
 		int						maxWid=0;
 		int						maxHei=0;
 		std::vector<FrameData>	frames;//avoid to tap into this one, favor frames[anim[frame]] which starts from zero
 		std::vector<int>		anim;
 		TileLib*				lib = nullptr;
 
-		TileGroup(const std::string & _id,TileLib * _lib):id(_id),lib(_lib) {
+		TileGroup(const char *_id,TileLib * _lib):id(_id),lib(_lib) {
 
 		};
 
@@ -99,7 +94,9 @@ namespace rd{
 			frames = grp.frames;
 			anim = grp.anim;
 			lib = nullptr;
-		}
+		};
+
+		void im();
 	};
 
 	class TileLib {
@@ -137,22 +134,28 @@ namespace rd{
 		
 		r2::Tile *					getTile(const char * str, int frame = 0, float px = 0.0, float py = 0.0, r2::Tile * res = nullptr);
 		r2::Tile *					getTile(const std::string & str, int frame, float px = 0.0, float py = 0.0, r2::Tile * res = nullptr);
-
+		r2::Tile *					getTile(const Str & str, int frame, float px = 0.0, float py = 0.0, r2::Tile * res = nullptr);
 		
+
+		static rd::TileLib*			get(const char* lib);
+
 		//used for scripts
 		r2::Tile *		_getTile(const std::string & str);
 
 		FrameData *		getFrameData(const char * str, int frame = 0);
 		FrameData *		getFrameData(const std::string & str, int frame = 0) { return getFrameData(str.c_str(), frame); };
+		FrameData *		getFrameData(const Str & str, int frame = 0) { return getFrameData(str.c_str(), frame); };
 		
 		//warning, can exist but not be an anim
 		bool			isAnim(const std::string & str) { return isAnim(str.c_str()); }
+		bool			isAnim(const Str & str) { return isAnim(str.c_str()); }
 		bool			isAnim(const char * k);
 
-		bool			exists(const std::string & str, int frame = 0);
-
 		//warning, can exist but not be an anim
-		bool			exists(const char * k, int frame = 0);
+		bool			exists(const char* k, int frame = 0);
+		bool			exists(const std::string & str, int frame = 0);
+		bool			exists(const Str& str, int frame = 0) { return exists(str.c_str()); };
+		
 		bool			hasSimilar(const char* grp);
 		void			getSimilar(const char* grp, rd::TileGroup*& res);
 		const char*		getSimilar(const char* grp);
@@ -161,17 +164,24 @@ namespace rd{
 
 		static TileLib*		mock(const TileLib* src, TileLib*preallocated = 0);
 
+		void			aliasGroup(const char * newName, const char* oldName);
 		void			setup(r2::Bitmap* to, const char* grp, int frm=0, float px=0.0f, float py=1.0f);
 		void			setup(r2::BatchElem* to, const char* grp, int frm=0, float px=0.0f, float py=1.0f);
+		void			im();
 	public:
+
+	protected:
+		Str				imFilter;
 		
 	};
 
 	struct TilePackage {
-		std::string		lib;
-		std::string		group;
+		Str 			lib;
+		Str				group;
+
 		r2::Tile*		tile = 0;
 		rd::TileLib*	cachedLib = 0;
+
 		bool			dirty = false;
 
 		TilePackage();
@@ -187,8 +197,20 @@ namespace rd{
 			return *this;
 		}
 
-		void			im();
+		inline bool		isReady()const { return 0 != tile; };
+
+		void			dispose();
+
+		void			setAnon(r2::Tile* t);
+		void			empty();
+
+		TilePackage		clone() const;
+
+		bool			im();
 		void			serialize(Pasta::JReflect* j, const char* _name = 0);
 		rd::TileLib*	getLib();
+
+		void			writeTo(rd::Vars& v)const;
+		bool			readFrom(const rd::Vars& v);
 	};
 }//end namespace rd

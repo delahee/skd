@@ -39,7 +39,7 @@ r2::Tile * r2::svc::Capture::make(r2::Tile * srcTile, const vector<BmpOp>& bmpOp
 
 	int szTexW = w;
 	int szTexH = h;
-	rd.isSingleBuffer = isSingleBuffer;
+	rd.setSingleBufferMode(isSingleBuffer);
 	
 	if(useStableTextureSize ){
 		szTexW = ceil((w / texPadForStability) + 1) * texPadForStability;//pad to nearest 128
@@ -112,7 +112,7 @@ r2::Tile * Capture::make(r2::Node * n, r2::TexFilter filter, int pad){
 
 		int szTexW = w;
 		int szTexH = h;
-		rd.isSingleBuffer = isSingleBuffer;
+		rd.setSingleBufferMode(isSingleBuffer);
 		if (useStableTextureSize) {
 			szTexW = ((w / texPadForStability) + 1) * texPadForStability;//pad to nearest 128
 			szTexH = ((h / texPadForStability) + 1) * texPadForStability;//pad to nearest 128

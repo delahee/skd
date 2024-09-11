@@ -1,17 +1,12 @@
 #include "stdafx.h"
-
-#include <cstring>
-
 #include "r/Color.hpp"
 #include "ColorLib.hpp"
 
-
 using namespace std;
 using namespace r;
+using namespace rd;
 
-//todo check
-r::Color rd::ColorLib::getHSV(r::Color c)
-{
+r::Color rd::ColorLib::getHSV(r::Color c){
 	float K = 0.f;
 	if (c.g < c.b)
 	{
@@ -33,7 +28,6 @@ r::Color rd::ColorLib::getHSV(r::Color c)
 	return res;
 }
 
-//todo check
 r::Color rd::ColorLib::fromHSV(r::Color hsv) {
 	float s = hsv.g;
 	float v = hsv.b;
@@ -83,9 +77,26 @@ r::Color rd::ColorLib::fromInt(unsigned int argb)
 }
 
 r::Color rd::ColorLib::fromString(const char * val) {
-	if( strchr(val,'#') )		return fromInt(strtoul(val+1, nullptr, 16));
-	if( strstr(val,"0x") )		return fromInt(strtoul(val+2, nullptr, 16));
-	return fromInt(atoi(val));
+	if (!val || !*val) return r::Color::White;
+
+	if (strchr(val, '#')) {
+		val++;
+		r::Color v = fromInt(strtoul(val, nullptr, 16));
+		if (strlen(val) == 6) 
+			v.a = 1.0f;
+		return v;
+	}
+	if (strstr(val, "0x")) {
+		val += 2;
+		r::Color v = fromInt(strtoul(val, nullptr, 16));
+		if (strlen(val) == 6) v.a = 1.0f;
+		return v;
+	}
+
+	int v = atoi(val);
+	if (v == 0) 
+		return r::Color::stringToColor(val);
+	return fromInt(v);
 }
 
 r::Color rd::ColorLib::fromString(const string & val){

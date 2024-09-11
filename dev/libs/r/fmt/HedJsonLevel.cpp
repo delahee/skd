@@ -1,7 +1,5 @@
 #include "stdafx.h"
 
-#include <functional>
-
 #include "1-json/jsoncpp/json.h"
 #include "1-files/Path.h"
 #include "r2/Node.hpp"
@@ -59,7 +57,7 @@ fmt::hed::TileOrigin fmt::HedJsonLevel::getOrigin(Value & tile) {
 
 void fmt::HedJsonLevel::loadRec( Json::Value & d, r2::Node * current ) {
 	r2::Node * node = current;
-	node->name = d.get("name", Value("")).asString();
+	node->name = d.get("name", Json::Value("")).asString();
 
 	Value defArray(ValueType::arrayValue);
 	Value defObj(ValueType::objectValue);

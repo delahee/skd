@@ -1,6 +1,5 @@
 #pragma once
 
-#include <vector>
 #include "r/Color.hpp"
 #include "rs/Reader.hpp"
 

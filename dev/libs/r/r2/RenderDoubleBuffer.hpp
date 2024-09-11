@@ -12,45 +12,39 @@ namespace r2 {
 		Back,
 	};
 	struct RenderDoubleBuffer {
-		r2::Tile					workingTile;
-		r2::Tile					backingTile;
-
-		SingleFbPage*				workBuff		= nullptr;
-		SingleFbPage*				backingBuff		= nullptr;
-
 		r2::Scene*					sc				= nullptr;
 		r2::Bitmap*					bmp				= nullptr;
 
-		bool						isSingleBuffer	= false;
 		bool						isFresh			= true;
 
 		r2::TexFilter				filter			= r2::TexFilter::TF_NEAREST;
 		Pasta::TextureFormat::Enum	colorFormat		= Pasta::TextureFormat::RGBA8;
 
-		bool						swapped			= false;
-		CurrentSide					side			= CurrentSide::Front;
+									RenderDoubleBuffer(r2::TexFilter filter = r2::TexFilter::TF_NEAREST, bool isSingleBuffer = true); // force single buffer for now
+									~RenderDoubleBuffer();
 
-		RenderDoubleBuffer(r2::TexFilter filter = r2::TexFilter::TF_NEAREST);
-		~RenderDoubleBuffer();
+		void						update(int w, int h);
+		void						setSingleBufferMode(bool mode);
 
-		//returns true if surface was resized
-		void				update(int w, int h);
+		Pasta::Texture*				getDrawingTexture();
+		Pasta::Texture*				getWorkingTexture();
+		Pasta::FrameBuffer*			getDrawingFB();
+		Pasta::FrameBuffer*			getWorkingFB();
+		r2::Tile *					getWorkingTile();
+		r2::Tile *					getDrawingTile();
 
-		//returns the drawing tile and swaps
-		//r2::Tile *			swapBuffer();
-		Pasta::Texture*		getDrawingTexture();
-		Pasta::Texture*		getWorkingTexture();
-		Pasta::FrameBuffer* getDrawingFB();
-		Pasta::FrameBuffer*	getWorkingFB(); 
+		void						im();
+    private:
+        bool						isSingleBuffer = true;
+        
+		r2::Tile					workTile;
+        SingleFbPage*				workBuff = nullptr;
 
-		r2::Tile *			getWorkingTile();
-		r2::Tile *			getDrawingTile(); 
+        r2::Tile					frontTile;
+        SingleFbPage*				frontBuff = nullptr;
 
-		void				im();
-
-		Pasta::ShadedTexture*	im0 = nullptr;
-		Pasta::ShadedTexture*	im1 = nullptr;
-		bool					imDisplayfull = false;
-		
+		Pasta::ShadedTexture*		im0 = nullptr;
+		Pasta::ShadedTexture*		im1 = nullptr;
+		bool						imDisplayfull = false;
 	};
 }

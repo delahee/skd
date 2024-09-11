@@ -34,6 +34,11 @@ r::u32 Texels::getTexelU32(Pasta::TextureData* td, const r2::Tile* t, int x, int
 }
 
 void Texels::setTexelU8(Pasta::TextureData* td, int x, int y, r::u8 val) {
+#ifdef _DEBUG
+	if( (x + y * td->width) >= (td->width * td->height))
+		throw "assert : overflow guaranteed";
+#endif // DEBUG
+
 	const int twidth = 1;
 	u32 toffset = (x + y * td->width) * twidth;
 	void * tex = &((u8*)(td->images[0].pixels[0]))[toffset];

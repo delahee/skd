@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "r2/Node.hpp"
+#include "rd/ABitmap.hpp"
 #include "rui/Canvas.hpp"
 #include "r2/StaticBox.hpp"
 
@@ -14,6 +15,7 @@
 #include "r2/fx/Part.hpp"
 #include "FX.hpp"
 
+using namespace rd;
 static int towerEverBuild = 0;
 static r::Color KIWI = r::Color(0x663931);
 
@@ -65,13 +67,13 @@ void Game::defeat(){
 	bp->setCenterRatio(0.5, 1);
 	bp->x = w*0.5;
 	bp->y = h+40;
-	tw.create(bp,VY, h+10,TType::TEaseIn);
+	tw.create(bp,rs::TVar::VY, h+10,rd::TType::TEaseIn);
 
 }
 
 void Game::intro(){
 	auto sc = root->getScene();
-	auto n = r2::Node::fromPool(sc->getByName("stage"));
+	auto n = r2::Node::fromPool(sc->findByName("stage"));
 	auto b = r2::Bitmap::fromColor(r::Color::Red, n);
 	auto w= rs::Display::width() / sc->getZoomX();
 	auto h = rs::Display::height() / sc->getZoomY();
@@ -104,7 +106,7 @@ void Game::intro(){
 
 			sfx("snd/intro.wav");
 			beginGame();
-			auto p = tw.create(n, VAlpha, 0, TType::TBurnIn, 600);
+			auto p = tw.create(n, rs::TVar::VAlpha, 0, rd::TType::TBurnIn, 600);
 			p->onEnd = [=](auto) {
 				n->destroy();
 			};
@@ -121,7 +123,7 @@ void Game::sfx(const char * name){
 void Game::beginGame(){
 	auto defy = bossPortrait->y;
 	bossPortrait->y += 25;
-	tw.create(bossPortrait, VY, defy, TType::TEaseOut, 500);
+	tw.create(bossPortrait, rs::TVar::VY, defy, rd::TType::TEaseOut, 500);
 	bossPortrait->replay(10);
 	startWave();
 }
@@ -148,7 +150,7 @@ void Game::victory() {
 	c->y = txt->y+ 50;
 	c->x = txt->x;
 	c->setScale(2, 2);
-	tw.create(c, VY, c->y - 10,TType::TEaseOut,-1);
+	tw.create(c, rs::TVar::VY, c->y - 10, rd::TType::TEaseOut,-1);
 	if (curWave)
 		curWave->stop();
 
@@ -358,11 +360,11 @@ template<> void Pasta::JReflect::visit(Tool&t, const char* name) {
 }
 
 void Tool::save(){
-	rs::jSerialize(*this, "editor", "map.json", "all");
+	rd::jSerialize(*this, "editor", "map.json", "all");
 }
 
 void Tool::load() {
-	rs::jDeserialize(*this, "editor", "map.json", "all");
+	rd::jDeserialize(*this, "editor", "map.json", "all");
 }
 
 
@@ -374,7 +376,7 @@ void Game::spawn(Str& sp) {
 	bossPortrait->replay(3);
 }
 
-void Game::im(){
+bool Game::im(){
 	static bool wasMousePressed = false;
 
 	using namespace ImGui;
@@ -560,6 +562,7 @@ void Game::im(){
 	End();
 
 	wasMousePressed = rs::Sys::isMousePressed;
+	return false;
 }
 
 void Game::loadMap() {
@@ -678,8 +681,8 @@ void Game::dressMap(){
 					msg->y = b->y;
 					msg->addOutline(KIWI);
 					msg->centered();
-					tw.delay(400,msg, VY, msg->y - 10);
-					tw.delay(400,msg, VAlpha, 0);
+					tw.delay(400,msg, rs::TVar::VY, msg->y - 10);
+					tw.delay(400,msg, rs::TVar::VAlpha, 0);
 					sfx("snd/click.wav");
 
 					return;

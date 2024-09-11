@@ -26,6 +26,7 @@
       <Item Name="rot">rotation</Item>
       <Item Name="color">color</Item>
       <Item Name="alpha">alpha</Item>
+      <Item Name="tile">tile</Item>
       <Item Name="batch">batch</Item>
     </Expand>
   </Type>

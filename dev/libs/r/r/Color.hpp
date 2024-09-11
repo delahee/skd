@@ -47,6 +47,7 @@ namespace r {
 		 */
 		static Color makeFromHSV(float _h, float _s_, float _v);
 		void getHSV(float *_h, float *_s, float *_v) const;
+		Vector3 getHSV() const;
 
 		void load(int col, float alpha) {
 			r = ((col >> 16) & 255) / 255.0;
@@ -76,24 +77,8 @@ namespace r {
 			return (a + ((b - a) * x));
 		};
 
-		inline r::u32 toInt() const {
-			const float v0 = 0.0f;
-			const float v255 = 255.0f;
-			r::u32 r = (r::u32)std::clamp(this->r*v255, v0, v255);
-			r::u32 g = (r::u32)std::clamp(this->g*v255, v0, v255);
-			r::u32 b = (r::u32)std::clamp(this->b*v255, v0, v255);
-			r::u32 a = (r::u32)std::clamp(this->a*v255, v0, v255);
-			return (unsigned int)(a << 24) | (r << 16) | (g << 8) | b;
-		}; 
-		
-		inline r::u32 toInt24() const {
-			const float v0 = 0.0f;
-			const float v255 = 255.0f;
-			r::u32 r = (r::u32)std::clamp(this->r * v255, v0, v255);
-			r::u32 g = (r::u32)std::clamp(this->g * v255, v0, v255);
-			r::u32 b = (r::u32)std::clamp(this->b * v255, v0, v255);
-			return (unsigned int) ((r << 16) | (g << 8) | b);
-		};
+		r::u32 toInt() const;
+		r::u32 toInt24() const;
 
 		unsigned int toIntRGBA() const;
 
@@ -111,19 +96,23 @@ namespace r {
 		static const Color Pink;
 		static const Color Violet;
 		static const Color Salmon;
+		static const Color Purple;
 		static const Color AcidGreen;
 
 		operator Pasta::Color() const {
 			return Pasta::Color(r, g, b, a);
 		};
 
-		Color	operator/(float k) const { return Color(r / k, g / k, b / k, a / k); }
+		Color	operator/(float k) const;
 		Color	operator * (const Color& c) const { return Color(r * c.r, g * c.g, b * c.b, a * c.a); }
 		Color	operator + (const Color& c) const { return Color(r + c.r, g + c.g, b + c.b, a + c.a); }
 		Color	operator - (const Color& c) const { return Color(r - c.r, g - c.g, b - c.b, a - c.a); }
 		Color	operator * (float v) const { return Color(r * v, g * v, b * v, a * v); }
-		bool	operator ==(const Color& other) const { return r == other.r && g == other.g && b == other.b && a == other.a; }
+		bool	operator==(const Color& other) const;
 		bool	operator!=(const Color& v) const { return !(*this == v); }
+
+		static Color minValue(Color oc, float thresh);
+		static Color minLum(Color oc, float thresh);
 
 		Color	operator=(const Color& col) {
 			r = col.r;
@@ -201,11 +190,21 @@ namespace r {
 			return r::Color(r * a, g * a, b * a, a);
 		};
 
+		static Color FastHSVtoRGB(float _h, float _s, float _v) {
+			//source :  https://x.com/XorDev/status/1808902860677001297
+			//cos(_h * 6.3 + Vector3(0, 4, 2)) * _s + 2. - _s) * _v * .5
+			auto r = cos(_h * 6.3f + 0 * _s + 2.f - _s)* _v * .5f;
+			auto g = cos(_h * 6.3f + 4 * _s + 2.f - _s) * _v * .5f;
+			auto b = cos(_h * 6.3f + 2 * _s + 2.f - _s) * _v * .5f;
+			return r::Color(r, g, b);
+		};
+
 		static Color fromUIntRGBA(unsigned int col);
 		static Color fromUInt(unsigned int col);
 		static Color fromUInt24(unsigned int col);
 
-		Color stringToColor(std::string col);
+		static Color stringToColor(const char * col);
+		static void imTest();
 
 		Pasta::Vector4 toVec4() const {
 			return Pasta::Vector4(r, g, b, a);
@@ -240,13 +239,15 @@ namespace r {
 		std::string toString() const;
 		std::string toHexString() const;
 
-		
+		bool im(const char * name);
 
 	};
+
+	typedef r::Color col;
 }
 
 namespace std{
-	static inline std::string to_string(const Color& c) {
+	static inline std::string to_string(const r::Color& c) {
 		return c.toString();
 	};
 }

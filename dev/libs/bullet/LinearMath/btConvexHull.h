@@ -15,7 +15,7 @@ subject to the following restrictions:
 */
 
 ///includes modifications/improvements by John Ratcliff, see BringOutYourDead below.
-
+#pragma once
 #ifndef BT_CD_HULL_H
 #define BT_CD_HULL_H
 

@@ -9,6 +9,7 @@ namespace rs{
 
 		VScaleX,
 		VScaleY,
+
 		VAlpha,//valpha is cumulative for children
 		VRotation,
 
@@ -23,6 +24,8 @@ namespace rs{
 		VHeight,
 
 		VVisibility,
+
+		VScaleZ,
 
 		VCustom0 = 256,
 		VCustom1,

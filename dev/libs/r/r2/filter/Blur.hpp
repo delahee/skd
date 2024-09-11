@@ -4,21 +4,18 @@
 #include "r2/Filter.hpp"
 #include "r2/Tile.hpp"
 #include "r2/filter/Layer.hpp"
+#include "r2/filter/Copy.hpp"
 #include "r2/svc/Kernel.hpp"
-
-#include "rd/JSerialize.hpp"
 
 namespace r2 {
 	namespace filter {
-		class Blur : public r2::filter::Layer {
+		class Blur : public r2::filter::Copy {
+			typedef r2::filter::Copy  Super;
 		public:
 									Blur();
 			explicit				Blur(const Vector2 & size, float scale = 1.0, r2::TexFilter filter = r2::TexFilter::TF_NEAREST);
 			virtual					~Blur();
 
-			//can put false to use a double buffer optimization
-			//beware the delay may cause issues
-			bool					isSingleBuffer = false;
 			float					offsetScale = 1.0f;
 			float					resolutionDivider = 1.0f;
 			Pasta::Vector2			size = Pasta::Vector2(4, 4);

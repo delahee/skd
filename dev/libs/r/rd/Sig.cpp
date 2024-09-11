@@ -11,6 +11,8 @@ rd::SignalHandler* rd::Sig::add(std::function<void(void)> f) {
 }
 
 void rd::Sig::remove(rd::SignalHandler* handler) {
+	if (!handler) return;
+
 	auto idx = std::find(signals.begin(), signals.end(), handler);
 	if (idx != signals.end()) {
 		signals.erase(idx);
@@ -35,7 +37,8 @@ rd::SignalHandler* rd::Sig::addOnce(std::function<void(void)> f) {
 void rd::Sig::trigger() {
 	isTriggering = true;
 	triggerredCount++;
-	for (auto s : signals) s->function();
+	for (auto s : signals) 
+		s->function();
 	if (signalsOnce.size() > 0) {
 		for (auto s : signalsOnce) s->function();
 		for (auto s : signalsOnce) delete s;
@@ -49,8 +52,11 @@ void rd::Sig::operator()() {
 }
 
 void rd::Sig::clear(){
+	if(signals.size())
 	for (auto sig : signals)
 		delete sig;
+
+	if (signalsOnce.size())
 	for (auto sigOnce : signalsOnce)
 		delete sigOnce;
 

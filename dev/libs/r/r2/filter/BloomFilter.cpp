@@ -11,15 +11,14 @@
 using namespace r2;
 using namespace r2::filter;
 
-#define SUPER r2::filter::Layer
-r2::filter::Bloom::Bloom() : r2::filter::Layer() {
+r2::filter::Bloom::Bloom() : r2::filter::Copy() {
 	ctrl.doPad = true;
 	type = FilterType::FT_BLOOM;
 }
 
 void r2::filter::Bloom::serialize(Pasta::JReflect& jr, const char* name){
 	if (name) jr.visitObjectBegin(name);
-	SUPER::serialize(jr, 0);
+	Super::serialize(jr, 0);
 	jr.visit(ctrl.dx, "dx");
 	jr.visit(ctrl.dy, "dy");
 	jr.visit(ctrl.luminanceVector, "lum");
@@ -39,7 +38,7 @@ void r2::filter::Bloom::serialize(Pasta::JReflect& jr, const char* name){
 r2::Filter* r2::filter::Bloom::clone(r2::Filter* _obj) {
 	Bloom* obj = (Bloom*)_obj;
 	if (!obj) obj = new Bloom();
-	SUPER::clone(obj);
+	Super::clone(obj);
 	obj->bloom.ctrl = bloom.ctrl;
 	return obj;
 }

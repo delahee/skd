@@ -1,19 +1,19 @@
 #include "stdafx.h"
-#include "../r2/Bitmap.hpp"
-#include "../r2/Sprite.hpp"
 
-#include "ABitmap.hpp"
 
 #include "1-graphics/geo_vectors.h"
 #include "1-graphics/Graphic.h"
+
+#include "r2/Bitmap.hpp"
+#include "r2/Sprite.hpp"
+
+#include "ABitmap.hpp"
 
 using namespace std;
 using namespace r2;
 using namespace rd;
 
-#define SUPER Bitmap
-
-rd::ABitmap::ABitmap(r2::Node * _parent) : SUPER( _parent ) {
+rd::ABitmap::ABitmap(r2::Node * _parent) : Super( _parent ) {
 	player.spr = this;
 #ifdef _DEBUG
 	name = string("Animated#") + to_string(uid);
@@ -21,7 +21,7 @@ rd::ABitmap::ABitmap(r2::Node * _parent) : SUPER( _parent ) {
 }
 
 
-ABitmap::ABitmap( const char * _groupName, TileLib * _lib, r2::Node * _parent ) : SUPER( _parent ) {
+ABitmap::ABitmap( const char * _groupName, TileLib * _lib, r2::Node * _parent ) : Super( _parent ) {
 	if (_lib)
 		lib = _lib;
 	if (_groupName)
@@ -47,13 +47,11 @@ void ABitmap::playAndLoop(const char * g) {
 	player.playAndLoop(g);
 }
 
-void rd::ABitmap::replay(int nb)
-{
+void rd::ABitmap::replay(int nb){
 	player.play(groupName.c_str(), nb);
 }
 
-void rd::ABitmap::stop()
-{
+void rd::ABitmap::stop(){
 	player.stop();
 }
 
@@ -61,11 +59,10 @@ bool ABitmap::isReady() {
 	return !destroyed && lib != nullptr && groupName.size();
 }
 
-void ABitmap::update(double dt)
-{
+void ABitmap::update(double dt){
 	float speed = lib ? lib->speed : 0.0;
 	player.update(dt * speed );
-	SUPER::update(dt);
+	Super::update(dt);
 }
 
 void ABitmap::setWidth(float _w) {
@@ -78,19 +75,16 @@ void ABitmap::setHeight(float _h) {
 	scaleY = _h / tile->height;
 }
 
-void ABitmap::setFrame(int _frame){
-	if (player.onFrame) player.onFrame(frame);
-
+void ABitmap::setFrame(int _frame) {
 	frame = _frame;
-
+	//if (player.onFrame) player.onFrame(frame); // onFrame managed by TileAnimPlayer directly
 	if (isReady()) {
 		frameData = lib->getFrameData(groupName.c_str(), frame);
 		syncTile();
 	}
 }
 
-r::Vector2 rd::ABitmap::getCenterRatio()
-{
+r::Vector2 rd::ABitmap::getCenterRatio(){
 	if(!usePivot)
 		return r::Vector2(0.0,0.0);
 	else 
@@ -120,6 +114,14 @@ void ABitmap::setFlippedX(bool onOff) {
 void ABitmap::setFlippedY(bool onOff) {
 	flippedY = onOff;
 	syncTile();
+}
+
+ABitmap* rd::ABitmap::andDestroy() {
+	player.setOnEnd([=](auto) {
+		rd::Garbage::trash(this);
+		return true;
+	});
+	return this;
 }
 
 void ABitmap::set(TileLib * l, const std::string & str, int frame, bool stopAllAnims) {
@@ -156,18 +158,17 @@ void ABitmap::set(TileLib * l, const char * g, int frame, bool stopAllAnims){
 		group = lib->getGroup(groupName.c_str());
 		frameData = lib->getFrameData(groupName.c_str(), frame);
 
-		if(frameData==nullptr)
+		if (!frameData)
 			return;
 
 		setFrame(frame);
 	}
 }
 
-Node * rd::ABitmap::clone(Node * n)
-{
+Node * rd::ABitmap::clone(Node * n){
 	if (!n) n = new ABitmap();
 	
-	SUPER::clone(n);
+	Super::clone(n);
 
 	ABitmap * s = dynamic_cast<ABitmap*>(n);
 	if (s) {
@@ -190,9 +191,26 @@ Node * rd::ABitmap::clone(Node * n)
 }
 
 void ABitmap::dispose() {
-	SUPER::dispose();
+	Super::dispose();
+	player.dispose();
+	player.spr = this;
+	pivotX = pivotY = 0;
+	frame = 0;
 	flippedX = false;
 	flippedY = false;
+}
+
+void rd::ABitmap::reset() {
+	group = 0;
+	pivotX = pivotY = 0;
+	frame = 0;
+	groupName.clear();
+	player.reset();
+	player.spr = this;
+	flippedX = false;
+	flippedY = false;
+	Super::reset();
+	setName("ABitmap");
 }
 
 void rd::ABitmap::play(const char* g, bool loop){
@@ -236,7 +254,7 @@ rd::ABitmap* rd::ABitmap::fromPool(TileLib* l, const char* str, r2::Node* parent
 }
 
 rd::ABitmap* rd::ABitmap::make(TileLib* l, const char * str, r2::Node* parent) {
-	return new rd::ABitmap(str,l, parent);
+	return rd::ABitmap::fromPool(l, str, parent);
 }
 
 rd::ABitmap* rd::ABitmap::fromLib(TileLib* l, const char* str, r2::Node* parent){
@@ -289,4 +307,3 @@ Bounds	rd::ABitmap::getMyLocalBounds() {
 	return b;
 }
 
-#undef SUPER

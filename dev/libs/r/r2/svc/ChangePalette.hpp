@@ -4,7 +4,6 @@
 
 #include "1-graphics/Texture.h"
 #include "EASTL/vector.h"
-#include "EASTL/unordered_map.h"
 
 namespace r2 {
 	namespace svc {
@@ -40,13 +39,15 @@ namespace r2 {
 			eastl::vector<uint32_t>		extractPalette(Pasta::TextureData * data);
 			void						setMainPalette(Pasta::TextureData * data);
 
-			void						setMainPalette(const eastl::vector<uint32_t>& mainPalette);
+            void						setMainPalette(const eastl::vector<uint32_t>& mainPalette);
+
+            void						addRange(const std::string& rangeName, eastl::vector<uint32_t>& index);
+            void						removeRange(const std::string& rangeName);
 			void						extractRange(const std::string & rangeName, eastl::vector<uint32_t>& paletteToDiff);
 
 			//warning takes indexes not colors
 			void						resetImage();
 			void						resetRange(const std::string & rangeName);
-			void						addRange(const std::string & rangeName, eastl::vector<uint32_t>&index);
 
 			void						changeAll(const Pasta::Matrix44 & mat);
 			void						changeAll(const eastl::vector<uint32_t>& nuColors);
@@ -60,8 +61,7 @@ namespace r2 {
 			void						apply(const eastl::unordered_map<uint32_t, uint32_t> & changeMap);
 
 			void						reset();
-			bool						isInRange(const char* rgName, uint32_t color);
-			PaletteRange*				getRange(const char * rgName);
+			PaletteRange*				getRange(const std::string& rgName);
 
 			eastl::unordered_map<uint32_t /*color*/, uint32_t /*palettedIdx*/> colorToIdx;
 		protected:

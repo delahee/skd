@@ -1,3 +1,4 @@
+#pragma once
 size_t _tb64xdec( const unsigned char *in, size_t inlen, unsigned char *out);
 size_t tb64memcpy(const unsigned char *in, size_t inlen, unsigned char *out);  // testing only
 

@@ -72,13 +72,14 @@ r2::Tile * r2::svc::Kernel::makeBlur1D(r2::Tile * src, double size, double scale
 	int dstWidth = srcWidth;
 	int dstHeight = srcHeight;
 
+    if (horizontalOrVertical)
+        dstWidth /= resolutionDivider;
+    else
+        dstHeight /= resolutionDivider;
+
 	dstWidth = srcWidth + src->dx;
 	dstHeight = srcHeight + src->dy;
 
-	if (horizontalOrVertical)
-		dstWidth /= resolutionDivider;
-	else
-		dstHeight /= resolutionDivider;
 	scale *= resolutionDivider;
 
 	Lib::m_gaussian_kernel(kernel.data(), kernel_size, size);
@@ -98,7 +99,8 @@ r2::Tile * r2::svc::Kernel::makeBlur1D(r2::Tile * src, double size, double scale
 	rd.update(dstWidth, dstHeight);
 
 	Texture *		res = rd.getWorkingTexture();
-	FrameBuffer *	resFb = rd.getWorkingFB();
+	FrameBuffer*	resFb = rd.getWorkingFB();
+	r2::Tile*		dest = rd.getWorkingTile();
 	Scene *			sc = rd.sc;
 	Bitmap *		b = rd.bmp;
 
@@ -114,18 +116,17 @@ r2::Tile * r2::svc::Kernel::makeBlur1D(r2::Tile * src, double size, double scale
 		b->scaleX = 1.0f / resolutionDivider;
 	else
 		b->scaleY = 1.0f / resolutionDivider;
-	
+
+    dest->resetTargetFlip();
+    dest->setPos(0, 0);
+    dest->setSize(dstWidth, dstHeight);
+    dest->textureFlipY();
+
 	b->mkUber();
 	b->shaderFlags |= USF_Gaussian_Blur;
 	b->updateShaderParam(uKernel, kernel.data(), kernel_size);
-	b->updateShaderParam(uSampleOffsetsXY, offsets.data(), kernel_size * 2);
+	b->updateShaderParam(uSampleOffsetsXY, offsets.data(), kernel_size * 2);	
 	b->drawTo(res, resFb, sc);
-
-	r2::Tile * dest = rd.getWorkingTile();
-	dest->resetTargetFlip();
-	dest->setPos(0, 0);
-	dest->setSize(dstWidth, dstHeight);
-	dest->textureFlipY();
 
 	return rd.getDrawingTile();
 }
@@ -168,11 +169,12 @@ r2::Tile* r2::svc::Kernel::makeBlur1D_KeepOffset(r2::Tile* src, double size, dou
 
 	rd.filter = filter;
 	rd.update(dstWidth, dstHeight);
-
-	Texture* res = rd.getWorkingTexture();
-	FrameBuffer* resFb = rd.getWorkingFB();
-	Scene* sc = rd.sc;
-	Bitmap* b = rd.bmp;
+	
+	Texture *		res = rd.getWorkingTexture();
+	FrameBuffer*	resFb = rd.getWorkingFB();
+	r2::Tile*		dest = rd.getWorkingTile();
+	Scene *			sc = rd.sc;
+	Bitmap *		b = rd.bmp;
 
 	res->setWrapModeUVW(PASTA_TEXTURE_CLAMP);
 
@@ -183,18 +185,17 @@ r2::Tile* r2::svc::Kernel::makeBlur1D_KeepOffset(r2::Tile* src, double size, dou
 	b->tile->copy(*src);
 	b->tile->setCenterDiscrete(0, 0);
 
+    dest->resetTargetFlip();
+    dest->translateCenterDiscrete(src->dx, src->dy);
+    dest->setPos(0, 0);
+    dest->setSize(dstWidth, dstHeight);
+    dest->textureFlipY();
+
 	b->mkUber();
 	b->shaderFlags |= USF_Gaussian_Blur;
 	b->updateShaderParam(uKernel, kernel.data(), kernel_size);
 	b->updateShaderParam(uSampleOffsetsXY, offsets.data(), kernel_size * 2);
 	b->drawTo(res, resFb, sc);
-
-	r2::Tile* dest = rd.getWorkingTile();
-	dest->resetTargetFlip();
-	dest->translateCenterDiscrete(src->dx, src->dy);
-	dest->setPos(0, 0);
-	dest->setSize(dstWidth, dstHeight);
-	dest->textureFlipY();
 
 	return rd.getDrawingTile();
 }

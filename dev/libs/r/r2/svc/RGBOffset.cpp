@@ -1,9 +1,9 @@
 #include "stdafx.h"
+
 #include "RGBOffset.hpp"
 
 using namespace std;
-r2::svc::RGBOffset::RGBOffset()
-{
+r2::svc::RGBOffset::RGBOffset(){
 	rgbOfs.resize(6);
 }
 
@@ -11,7 +11,7 @@ void r2::svc::RGBOffset::bmpOp(r2::Bitmap & bmp)
 {
 	bmp.mkUber();
 	bmp.shaderFlags |= USF_RGBOffset;
-	bmp.updateShaderParam(string("uRGBOffset"), rgbOfs.data(), 6);
+	bmp.updateShaderParam("uRGBOffset", rgbOfs.data(), 6);
 }
 
 r2::Tile* r2::svc::RGBOffset::make(r::Texture* tex, const float* rgbOfs, r2::TexFilter filter) {

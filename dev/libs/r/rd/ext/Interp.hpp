@@ -25,10 +25,10 @@ namespace rd {
 				float t2 = t * t;
 
 				q += (-p0 + p2) * t;
-				q += (2.0 * p0 - 5.0 * p1 + 4 * p2 - p3) * t2;
-				q += (-p0 + 3 * p1 - 3 * p2 + p3) * t2 * t;
+				q += (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2;
+				q += (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t2 * t;
 
-				return 0.5 * q;
+				return 0.5f * q;
 			};
 
 			static Vector2 c2(
@@ -44,10 +44,10 @@ namespace rd {
 			};
 
 			static r::Vector3 c3(
-				r::Vector3 p0,
-				r::Vector3 p1,
-				r::Vector3 p2,
-				r::Vector3 p3, float t)
+				const r::Vector3 & p0,
+				const r::Vector3 & p1,
+				const r::Vector3 & p2,
+				const r::Vector3 & p3, float t)
 			{
 				return r::Vector3(
 					catmull(p0.x, p1.x, p2.x, p3.x, t),
@@ -57,10 +57,10 @@ namespace rd {
 			};
 
 			static r::Vector4 c4(
-				r::Vector4 p0,
-				r::Vector4 p1,
-				r::Vector4 p2,
-				r::Vector4 p3, float t)
+				const r::Vector4 & p0,
+				const r::Vector4 & p1,
+				const r::Vector4 & p2,
+				const r::Vector4 & p3, float t)
 			{
 				return r::Vector4(
 					catmull(p0.x, p1.x, p2.x, p3.x, t),
@@ -103,16 +103,19 @@ namespace rd {
 
 		class CurveC3 {
 		public:
-			eastl::vector<Vector3> data;
+			eastl::vector<Vector3> 
+					data;
 
-					CurveC3() {};
+					CurveC3() {}; 
+					~CurveC3() { data.clear(); };
+
 			Vector3	plot( float t );
 
 			void	load(const char* folder, const char* file);
 			void	save(const char* folder, const char* file);
 			bool	im();
 		protected:
-			const Vector3& get(int idx);
+			Vector3 get(int idx);
 		};
 	}
 }

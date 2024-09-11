@@ -1,25 +1,46 @@
 #pragma once
 
-#include <ctime>
-#include <string>
-#include <chrono>
-#ifdef PASTA_WIN
 #include <filesystem>
-#endif
-
-#include "4-ecs/JsonReflect.h"
-#include "1-files/FileMgr.h"
 #include "1-files/File.h"
+#include "4-ecs/JsonReflect.h"
+
 #include "r2/Scene.hpp"
 #include "r2/Bitmap.hpp"
 #include "r2/Node.hpp"
+#include "r2/Graphics.hpp"
 #include "r2/Sprite.hpp"
-#include "Anon.hpp"
-
+#include "rd/Anon.hpp"
+#include "rd/Dir.hpp"
 #include "rs/Checksum.hpp"
-#include <optional>
+#include "rd/Vars.hpp"
+#include "rd/TileAnimPlayer.hpp"
 
-namespace rs {
+namespace rd {
+	struct EventRef;
+	class Anon;
+
+	class SerializationRegister {
+	public:
+		static SerializationRegister* me;
+
+		std::vector<std::pair<int,std::function<void*()> >> data;
+
+		SerializationRegister();
+		
+		void reg(int typeId, std::function<void*()> alloc) {
+			data.push_back(std::pair(typeId,alloc));
+		};
+		
+		template<typename T>
+		T* create(int typeId) {
+			for(auto &p : data)
+				if (p.first == typeId)
+					return (T*) p.second();
+			return 0;
+		};
+
+		void* createRaw(int typeId);
+	};
 
 	template<typename T>
 	static std::vector<char> jSerializeToMemory(T& t ) {
@@ -60,7 +81,7 @@ namespace rs {
 	//serialization facilities for editors and stuff like that
 	//saves in the game src folder, so not really for game saves
 	template<typename T>
-	static bool	jSerialize(T & t, const std::string & folder, const std::string & path, const char * rootName = nullptr) {
+	static bool	jSerialize(T & t, const char* folder, const char* path, const char * rootName = nullptr) {
 		Pasta::JWriter writer(0);
 		writer.setDocument(new rapidjson::Document());
 		writer.m_jvalue = writer.m_document;//why not...
@@ -68,11 +89,11 @@ namespace rs {
 		writer.visit(t, rootName);
 		Pasta::FileMgr * mgr = Pasta::FileMgr::getSingleton();
 
-		mgr->createDirectories(folder.c_str());
-		Pasta::File * f = mgr->createFile( (folder +"/"+ path ).c_str() );
+		mgr->createDirectories((std::string("res/") +folder).c_str());
+		Pasta::File * f = mgr->createFile( (std::string(folder) +"/"+ path ).c_str() );
 		bool done = f->open(Pasta::File::FileAttribute::FA_WRITE);
 		if (!f||!done) {
-			trace("Error cannot create file! " + path);
+			rs::trace( Str256f("Error cannot create file! %s",path));
 			return false;
 		}
 		rapidjson::StringBuffer buf;
@@ -81,6 +102,16 @@ namespace rs {
 		f->flush();
 		f->close();
 		return true;
+	};
+
+	template<typename T>
+	static inline bool	jSerialize(T& t, const std::string& folder, const std::string& path, const char* rootName = nullptr) {
+		return jSerialize(t, folder.c_str(), path.c_str(), rootName);
+	};
+
+	template<typename T>
+	static inline bool	jSerialize(T& t, const Str& folder, const Str& path, const char* rootName = nullptr) {
+		return jSerialize(t, folder.c_str(), path.c_str(), rootName);
 	};
 
 	template<typename T>
@@ -106,7 +137,7 @@ namespace rs {
 		if (error) {
 			ok = false;
 			auto err = reader.m_document->GetParseError();
-			std::cout << "parse err:" << err << std::endl;
+			std::cout << "parse err:" << err << "\n";
 		}
 		else {
 			reader.m_jvalue = reader.m_document;
@@ -119,7 +150,7 @@ namespace rs {
 	};
 
 	template<typename T>
-	static bool	jDeserializeRaw(T& target, const std::string& path) {
+	static bool	jDeserializeRaw(T& target, const char * path) {
 		std::string res;
 		bool ok = rs::File::read(path,res);
 		if (!ok) return ok;
@@ -127,12 +158,23 @@ namespace rs {
 		return deserOk;
 	}
 
+	static void prefetch(const char* folder, const char* path);
+
 	template<typename T>
-	static bool	jDeserialize(T & target, const std::string & folder, const std::string & path, const char* rootName = nullptr) {
+	static bool	jDeserialize(T & target, const char * folder, const char * path, const char* rootName = nullptr) {
 		Pasta::FileMgr * mgr = Pasta::FileMgr::getSingleton();
-		mgr->createDirectories(folder.c_str());
-		std::string npath = mgr->convertResourcePath( (folder + "/" + path).c_str() );
-		char * txt = (char*)mgr->load(npath);
+		Str512f fullPath("%s/%s", folder, path);
+		char* txt = 0;
+		bool useCached = true;
+		if (!rd::RscLib::fileCache.enabled) {
+			std::string npath = mgr->convertResourcePath(fullPath.c_str());
+			txt = (char*)mgr->load(npath);
+			useCached = false;
+		}
+		else {
+			txt = rd::RscLib::fileCache.getCachedText(fullPath.c_str());
+			useCached = true;
+		}
 		bool ok = false;
 		if (txt) {
 			Pasta::JReader reader(0);
@@ -148,320 +190,29 @@ namespace rs {
 				ok = true;
 			}
 		}
-		mgr->release(txt);
+		if(!useCached)
+			mgr->release(txt);
 		return ok;
+	};
+
+	template<typename T>
+	static bool	jDeserialize(T& target, const std::string& folder, const std::string& path, const char* rootName = nullptr) {
+		return jDeserialize(target, folder.c_str(), path.c_str(), rootName);
 	};
 }
 
 namespace Pasta {
-	template<> inline void JReflect::visit(rd::Vars& c, const char* name) {
-		c.serialize(this, name);
-	}
-
-	template<> inline void JReflect::visit(rd::Anon &c, const char * name) {
-		bool newMethod = true;
-		if (isReadMode()) {
-			auto baseObject = JsonGet(m_jvalue, name);
-			newMethod = baseObject->IsArray(); // format detection
-		}
-		
-		if (newMethod) {
-			u32 size = 1;
-			rd::Anon* anon = &c;
-			while (anon->sibling) { anon = anon->sibling; size++; }
-			visitArrayBegin(name, size);
-			anon = &c;
-			for (u32 i = 0; i < size; i++) {
-				visitIndexBegin(i);
-				visitObjectBegin(nullptr);
-
-				visit(anon->name, "name");
-				visit((int&)anon->type, "type");
-				visit((int&)anon->typeEx, "typeEx");
-
-				int szBytes = anon->getByteSizeCapacity();
-				visit(szBytes, "szBytes");
-
-				if (m_read) {
-					auto t = anon->type;
-					auto te = anon->typeEx;
-					switch (anon->type) {
-					case AType::AVoid:
-						break;
-					case AType::AFloat:
-						anon->mkFloat(0);
-						break;
-					case AType::AFloatBuffer:
-						anon->mkFloatBuffer(nullptr, szBytes / sizeof(float));
-						anon->typeEx = te;//restore type
-						break;
-					case AType::AIntBuffer:
-						anon->mkIntBuffer(nullptr, szBytes / sizeof(int));
-						anon->typeEx = te;//restore type
-						break;
-					case AType::AByteBuffer:{
-						//reserve space
-						anon->mkByteBuffer(nullptr, szBytes);
-						anon->type = t;//restore type
-						anon->typeEx = te;//restore type
-						break;
-					}
-					case AType::AString:
-						anon->mkByteBuffer(nullptr, szBytes);
-						anon->type = t;//restore type
-						anon->typeEx = te;//restore type
-						break;
-					case AType::AInt:
-						anon->mkInt(0);
-						break;
-
-					case AType::AInt64:
-						anon->mkInt64(0);
-						break;
-					case AType::AUInt64:
-						anon->mkUInt64(0);
-						break;
-					default:
-						break;
-					}
-				}
-
-				switch (anon->type) {
-				case AType::AVoid:
-					break;
-
-				case AType::AByteBuffer: {
-					Pasta::u8* bb = (Pasta::u8*)anon->asByteBuffer();
-					std::string b64;
-					if (!isReadMode()) //write bytes
-						b64 = rs::Encoding::encodeBase64Str(bb,anon->getByteSizeCapacity());
-					int szB64 = b64.length();
-					visit(szB64, "sz");
-					visit(b64, "v");
-					if(isReadMode())
-						rs::Encoding::decodeBase64Buff( bb, szB64, b64);
-					break;
-				}
-				case AType::AIntBuffer:
-					visit(anon->asIntBuffer(), szBytes / 4, "val");
-					break;
-				case AType::AFloatBuffer:
-					visit(anon->asFloatBuffer(), szBytes / 4, "val");
-					break;
-				case AType::AString:
-					visitString(anon->asString(), szBytes, "val");
-					break;
-				case AType::AFloat:
-					visit(anon->asFloat(), "val");
-					break;
-				case AType::AInt:
-					visit(anon->asInt(), "val");
-					break;
-				case AType::AInt64:
-					visit(anon->asInt64(), "val");
-					break;
-				case AType::AUInt64:
-					visit(anon->asUInt64(), "val");
-					break;
-				case AType::ADouble:
-					visit(anon->asDouble(), "val");
-					break;
-				default:
-					break;
-				}
-
-				bool hasChild = anon->child != nullptr;
-				visit(hasChild, "hasChild");
-				if (isReadMode() && hasChild)
-					anon->child = new rd::Anon();
-				if (anon->child)
-					visit(*anon->child, "child");
-
-
-				if (isReadMode() && i < size - 1)
-					anon->sibling = new rd::Anon();
-				anon = anon->sibling;
-				visitObjectEnd(nullptr);
-				visitIndexEnd();
-			}
-			visitArrayEnd(name);
-		} else {
-			if (name) visitObjectBegin(name);
-			visit(c.name, "name");
-			visit((int&)c.type, "type");
-			visit((int&)c.typeEx, "typeEx");
-
-			int szBytes = c.getByteSizeCapacity();
-			visit(szBytes, "szBytes");
-
-			if (m_read) {
-				auto t = c.type;
-				auto te = c.typeEx;
-				switch (c.type) {
-					case AType::AVoid:
-						break;
-					case AType::AFloat:
-						c.mkFloat(0);
-						break;
-					case AType::AFloatBuffer: 
-						c.mkFloatBuffer(nullptr, szBytes / sizeof(float));
-						c.typeEx = te;//restore type
-						break;
-					case AType::AIntBuffer:
-						c.mkIntBuffer(nullptr, szBytes / sizeof(int));
-						c.typeEx = te;//restore type
-						break;
-					case AType::AByteBuffer:
-					case AType::AString:
-						c.mkByteBuffer(nullptr,szBytes);
-						c.type = t;//restore type
-						c.typeEx = te;//restore type
-						break;
-					case AType::AInt:
-						c.mkInt(0);
-						break;
-
-					case AType::AInt64:
-						c.mkInt64(0);
-						break;
-					case AType::AUInt64:
-						c.mkUInt64(0);
-						break;
-					default:
-						break;
-				}
-			}
-
-			switch (c.type) {
-				case AType::AVoid:
-					break;
-
-				case AType::AByteBuffer: {
-					Pasta::u8* bb = (Pasta::u8*)c.asByteBuffer();
-					visit(bb, szBytes, "val");
-					break;
-				}
-				case AType::AIntBuffer:
-					visit(c.asIntBuffer(), szBytes/4, "val");
-					break;
-				case AType::AFloatBuffer:
-					visit(c.asFloatBuffer(), szBytes/4, "val");
-					break;
-				case AType::AString:
-					visitString(c.asString(), szBytes, "val");
-					break;
-				case AType::AFloat:
-					visit(c.asFloat(), "val");
-					break;
-				case AType::AInt:
-					visit(c.asInt(), "val");
-					break;
-				case AType::AInt64:
-					visit(c.asInt64(), "val");
-					break;
-				case AType::AUInt64:
-					visit(c.asUInt64(), "val");
-					break;
-				case AType::ADouble:
-					visit(c.asDouble(), "val");
-					break;
-				default:
-					break;
-			}
-
-			bool hasSibling = c.sibling != nullptr;
-			visit(hasSibling, "hasSibling");
-			if (isReadMode() && hasSibling) 
-				c.sibling = new rd::Anon();
-			if (c.sibling) 
-				visit(*c.sibling, "sibling");
-
-			bool hasChild = c.child != nullptr;
-			visit(hasChild, "hasChild");
-			if (isReadMode() && hasChild)
-				c.child = new rd::Anon();
-			if (c.child)
-				visit(*c.child, "child");
-
-			if (name) visitObjectEnd(name, true);
-		}
-	};
-
-	template<> inline void JReflect::visit(r::Vector4& c, const char* name) {
-		if (name) visitObjectBegin(name);
-		visitFloat(c.x, "x");
-		visitFloat(c.y, "y");
-		visitFloat(c.z, "z");
-		visitFloat(c.w, "w");
-		if (name) visitObjectEnd(name, true);
-	};
-
-	template<> inline void JReflect::visit(r::Matrix44& c, const char* name) {
-		visitObjectBegin(name);
-		visit(c.ptr(),16,"values");
-		visitObjectEnd(name, true);
-	};
-
-
-	template<> inline void JReflect::visit(r::Vector3 &c, const char * name) {
-		if (name) visitObjectBegin(name);
-		visitFloat(c.x, "x");
-		visitFloat(c.y, "y");
-		visitFloat(c.z, "z");
-		if (name) visitObjectEnd(name, true);
-	};
-	
-	template<> inline void JReflect::visit(r::Vector3i& c, const char* name) {
-		if (name) visitObjectBegin(name);
-		visit(c.x, "x");
-		visit(c.y, "y");
-		visit(c.z, "z");
-		if (name) visitObjectEnd(name, true);
-	};
-
-	template<> inline void JReflect::visit(r::Color &c, const char * name) {
-		if (name) visitObjectBegin(name);
-		visitFloat(c.r, "r");
-		visitFloat(c.g, "g");
-		visitFloat(c.b, "b");
-		visitFloat(c.a, "a");
-		if (name) visitObjectEnd(name,true);
-	};
-
-	template<> inline void JReflect::visit(Pasta::Color &c, const char * name) {
-		if (name) visitObjectBegin(name);
-		visitFloat(c.r, "r");
-		visitFloat(c.g, "g");
-		visitFloat(c.b, "b");
-		visitFloat(c.a, "a");
-		if (name) visitObjectEnd(name, true);
-	};
-
-	template<> inline void JReflect::visit(r2::Tri&c, const char * name) {
-		if (name) visitObjectBegin(name);
-		visit(c.cooPtr(), 3 * 3, "coos");
-		visit(c.colorPtr(), 3 * 4, "colors");
-		if (name) visitObjectEnd(name);
-	};
-
-/*
-	template<> 
-	inline void JReflect::visit(std::optional<Vector2>& c, const char* name) {
-		if (name) visitObjectBegin(name); 
-		bool hasVal = (c != std::nullopt); 
-		visit(hasVal, "hv"); 
-		if (hasVal) {
-			if( !isReadMode())
-				visit(*c, "v");//write it
-			else{
-				Vector2 val = {};//use a proxy for assign
-				visit(val, "v");
-				c = val;
-			} 
-		}
-		if (name) visitObjectEnd(name); 
-	};
-	*/
+	extern template void Pasta::JReflect::visit<>(rd::Anon& c, const char* name);
+	extern template void JReflect::visit(rd::Vars& c, const char* name);
+	extern template void JReflect::visit(r::Vector4& c, const char* name);
+	extern template void JReflect::visit(r::Matrix44& c, const char* name);
+	extern template void JReflect::visit(r::Vector3 &c, const char * name);
+	extern template void JReflect::visit(r::Vector3i& c, const char* name);
+	extern template void JReflect::visit(r::Vector3s& c, const char* name) ;
+	extern template void JReflect::visit(r::Color &c, const char * name) ;
+	extern template void JReflect::visit(Pasta::Color &c, const char * name);
+	extern template void JReflect::visit(r2::Tri& c, const char* name);
+	extern template void JReflect::visit<>(r2::Vertex& vtx, const char* name);
 
 #define DECL_SER_ENUM( ty ) \
 	template<> \
@@ -493,6 +244,8 @@ namespace Pasta {
 	DECL_SER_OPT( Vector2 )
 	DECL_SER_OPT( Vector3 )
 	DECL_SER_OPT( Vector4 )
+	DECL_SER_OPT( r::Color )
+	
 
 
 #define DECL_SER_OPT_ENUM( ty ) \
@@ -543,56 +296,32 @@ namespace Pasta {
 	};
 
 	//should probably hint at metadata or tile retrieval thing around here
-	template<> inline void JReflect::visit(r2::Tile& a, const char* name) {
-		if (name) visitObjectBegin(name);
-
-		if (a.getTexture()) {
-			std::string rscName = (a.getTexture()) ? a.getTexture()->getResourceName() : "";
-			visit(rscName, "rscName");
-			if (m_read) {
-				//see if we can find it in tile sources
-			}
-		}
-
-		visit(a.flags, "flags");
-
-		visit(a.dx, "dx");
-		visit(a.dy, "dy");
-
-		visit(a.x, "x");
-		visit(a.y, "y");
-
-		visit(a.width, "width");
-		visit(a.height, "height");
-
-		visit(a.u1, "u1");
-		visit(a.v1, "v1");
-		visit(a.u2, "u2");
-		visit(a.v2, "v2");
-		if (name) visitObjectEnd(name);
-	};
+	extern template void JReflect::visit<>(r2::Tile& a, const char* name);
+	extern template void Pasta::JReflect::visit<>(Str& str, const char* _name);
 
 	template<> inline void Pasta::JReflect::visit(r2::Bounds& b, const char* _name) {
+		if (_name) visitObjectBegin(_name);
 		visit(b.xMin, "xmin");
 		visit(b.xMax, "xmax");
 		visit(b.yMin, "ymin");
 		visit(b.yMax, "ymax");
+		if (_name) visitObjectEnd(_name);
 	};
 
-	template<> inline void Pasta::JReflect::visit(Str & str, const char* _name) {
-		std::string s;
-		if (m_read) {
-			visit(s, _name);
-			str = s;
-		}
-		else {
-			s.assign(str.c_str(), str.length());
-			visit(s, _name);
-		}
-	};
-
-	template<> inline void Pasta::JReflect::visit(DIRECTION& val, const char* _name) {
+	template<> inline void Pasta::JReflect::visit(rd::Dir& val, const char* _name) {
 		visit((int&)val, _name);
 	};
 
+	template<> inline void JReflect::visit(rd::TilePackage& p, const char* name) {
+		p.serialize(this, name);
+	};
+
+	template<> inline void JReflect::visit(qbool & val, const char* _name) {
+		visit((int&)val, _name);
+	};
+
+	//template<> inline void JReflect::visit(rd::EventRef& ref, const char* _name) {
+	//	ref.visit(this, _name);
+	//};
+	
 }

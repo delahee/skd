@@ -15,7 +15,7 @@ void rgp::CineController::add(std::function<void(AnonCineStep*)> f) {
 	steps.push_back(an);
 }
 
-void rgp::CineController::im() {
+bool rgp::CineController::im() {
 	using namespace ImGui;
 	Value("name", name);
 	Value("cursor", cursor);
@@ -33,6 +33,7 @@ void rgp::CineController::im() {
 		PopTextColor();
 		idx++;
 	}
+	return false;
 }
 
 void rgp::CineController::addInstant(CineStep* s) {

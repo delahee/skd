@@ -5,9 +5,10 @@
 
 namespace r2{
 	class Filter;
+	class Tile;
 
 	class Sprite : public r2::Node {
-	
+		typedef r2::Node		Super;
 	public:
 		bool					depthRead				= false;
 		bool					depthWrite				= false;
@@ -43,7 +44,8 @@ namespace r2{
 
 		virtual	void			reset();
 
-		virtual void			draw(rs::GfxContext* ctx) override;
+        virtual void			draw(rs::GfxContext* ctx) override;
+        virtual void			drawFilteringResult(rs::GfxContext* ctx) override;
 
 		virtual void			setColor(int col, float a = 1.0f);
 		virtual void			setColor(const r::Color &col);
@@ -101,18 +103,23 @@ namespace r2{
 
 		void					applyDepth(rs::GfxContext* ctx);
 
-		virtual Node*			clone(Node*n);
+		virtual Node*			clone(Node*n) override;
 
 		virtual void			im() override;
 		void					imBlend();
 
-		virtual void			drawFilteringResult(rs::GfxContext* ctx) override;
 		virtual void			serialize(Pasta::JReflect& jr, const char* _name) override;
 
 		virtual double			getValue(rs::TVar valType);
 		virtual double			setValue(rs::TVar valType, double val);
 
 		void					blendAdd();
+		void					blendAlphaMultiply();
+		void					blendMultiply();
+		void					blendAlpha();
+		void					blendOpaque();
+		void					texFilterLinear();
+		void					texFilterNearest();
 
 		void					setShaderTimeOffset(float f);
 

@@ -5,12 +5,14 @@
 #include "rd/JSerialize.hpp"
 #include "rd/TileLib.hpp"
 #include "r2/im/TilePicker.hpp"
+#include "r2/NodeAgent.hpp"
 #include "rd/AudioEmitter2D.hpp"
 #include "filter/Layer.hpp"
 #include "filter/Blur.hpp"
 #include "filter/Glow.hpp"
 #include "filter/Bloom.hpp"
 #include "filter/ColorMatrix.hpp"
+#include "ri18n/RichText.hpp"
 
 using namespace std;
 using namespace r2;
@@ -47,7 +49,63 @@ static r2::Node* emptyNode(NodeType nt) {
 		case NodeType::NT_BMP:			return new r2::Bitmap();
 		case NodeType::NT_ABMP:			return new rd::ABitmap();
 		case NodeType::NT_AUDIO2D:		return new rd::AudioEmitter2D();
+		case NodeType::NT_RICH_TEXT:	return new ri18n::RichText();
+		case NodeType::NT_RUI_BUTTON:	return new rui::Button("",0,0);
 		default:						return r2::Serialize::customTypeResolver(nt);
+	}
+}
+
+void r2::Node::serializeComponents(Pasta::JReflect& jr) {
+
+	std::vector<std::string>	cmpTypes;
+	std::vector<rd::Vars*>		cmpVars;
+
+	if (jr.isReadMode()) {
+		
+	}
+	else {
+		if(agl)
+			for (auto agElem : agl->agents.repo){
+				auto ag = dynamic_cast<r2::NodeAgent*>( agElem);
+				cmpTypes.push_back(ag->type);
+				cmpVars.push_back(&ag->data);
+			}
+	}
+	//read a list of components and data?
+
+	jr.visitObjectBegin("ct");
+	jr.visit(cmpTypes, "cmpTypes");
+	jr.visitObjectEnd("ct");
+
+	jr.visitObjectBegin("cv");
+	jr.visitPtr(cmpVars, cmpVars.size(),"cmpVars");
+	jr.visitObjectEnd("cv");
+	
+	if (jr.isReadMode()) {
+		if (cmpTypes.size()) {
+			if (agl) {
+				agl->safeDestruction();
+			}
+			agl = 0;
+			
+			agl = new r2::NodeAgentList( this );
+			int idx = 0;
+			for (auto& t : cmpTypes) {
+				auto n = NodeAgentFactory::create(t.c_str());
+				if (n) {
+					n->node = this;
+					n->data = *cmpVars[idx];
+					agl->agents.add(n);
+					n->apply();
+				}
+				idx++;
+			}
+		}
+		cmpVars.clear();
+		cmpTypes.clear();
+	}
+	else {
+		//nothing to write it was done successfully
 	}
 }
 
@@ -62,35 +120,17 @@ void r2::Node::serializeChildren(Pasta::JReflect& jr) {
 	u32 nbChildren = serializedChildren.size();
 	jr.visit(nbChildren, "nbChildren");
 	if (jr.isReadMode()) serializedChildren.resize(nbChildren);
-	std::vector<int> ctypes;
-	if (jr.isReadMode())
-		ctypes.resize(nbChildren);
-	else
-		for (auto& c : serializedChildren)
-			ctypes.push_back((int)c->getType());
-	jr.visit(ctypes, "children_types");
 	if (jr.visitArrayBegin("children", nbChildren)) {
 		for (Pasta::u32 i = 0; i < nbChildren; ++i) {
 			jr.visitIndexBegin(i);
 			jr.visitObjectBegin(nullptr);
 
-			if (i == 124) {
-				int nop = 0;
-			}
-			r2::Node* n = nullptr;
-			NodeType nt = NodeType::NT_NODE;
+			r2::Node* n = serializedChildren[i];
 			if (jr.isReadMode()) {
-				if (i < ctypes.size())
-					nt = (NodeType)ctypes[i];
+				NodeType nt = NodeType::NT_NODE;
+                jr.visitInt((int&)nt, "type");
 				n = emptyNode(nt);
 			}
-			else {
-				n = serializedChildren[i];
-				nt = n->getType();
-			}
-
-			//if (!jr.isReadMode())
-			//	jr.visit(i, "idx");
 
 			if (n)
 				jr.visit(*n, nullptr);
@@ -104,7 +144,6 @@ void r2::Node::serializeChildren(Pasta::JReflect& jr) {
 
 			jr.visitObjectEnd(nullptr);
 			jr.visitIndexEnd();
-			//cout << i << " " << nt << " " << n->uid << "\n";
 		}
 	}
 	jr.visitArrayEnd("children");
@@ -168,8 +207,12 @@ void r2::Node::serialize(Pasta::JReflect& jr, const char* _name) {
 	if (_name) jr.visitObjectBegin(_name);
 	jr.visit(name, "name");
 	jr.visit(uid, "uid");
-	if (jr.isReadMode())
+	if (jr.isReadMode()) 
 		rs::Sys::reserveUID(uid);
+
+	u64 breakOn = 627;
+	if (uid == breakOn)
+		int here = 0;
 
 	NodeType t = getType();
 	jr.visit((int&)t, "type");
@@ -207,6 +250,8 @@ void r2::Node::serialize(Pasta::JReflect& jr, const char* _name) {
 	if (!(nodeFlags & NF_SKIP_CHILD_SERIALIZATION))
 		serializeChildren(jr);
 
+	serializeComponents(jr);
+
 	if (_name) jr.visitObjectEnd(_name);
 	if (jr.m_read) 
 		rs::Sys::reserveUID(uid);
@@ -227,7 +272,7 @@ void r2::Scene::serialize(Pasta::JReflect & jr, const char * _name) {
 	jr.visit(sceneWidth, "sceneWidth");
 	jr.visit(sceneHeight, "sceneHeight");
 	if (_name) jr.visitObjectEnd(_name);
-};
+}
 
 void r2::EarlyDepthScene::serialize(Pasta::JReflect & jr, const char * _name) {
 	if (rd::Bits::is(nodeFlags, NF_SKIP_SERIALIZATION))
@@ -271,7 +316,7 @@ void r2::Sprite::serialize(Pasta::JReflect& jr, const char* _name) {
 		bool hasShaderValues = shaderValues.head;
 		jr.visit(hasShaderValues, "hasShaderValues");
 		if (hasShaderValues && jr.isReadMode())
-			shaderValues.head = new Anon();
+			shaderValues.head = rd::Anon::fromPool();
 		if (hasShaderValues)
 			jr.visit(*shaderValues.head, "shaderValues");
 	}
@@ -286,13 +331,31 @@ void r2::Bitmap::serialize(Pasta::JReflect & jr, const char * _name) {
 	jr.visit(*tile, "tile");
 	if (jr.isReadMode()) {
 		if (vars.has("rd::TileGroup")) {
-			//we have the group in case we need to fix the instance automatically?
-			//const char* group = getMetadata("rd::TileGroup")->asString();
-
 			const char* libName = vars.get("rd::TileLib")->asString();
-			//todo manage multi page textures
 			rd::TileLib * lib = r2::im::TilePicker::getOrLoadLib(libName);
 			if(lib) tile->setTexture(lib->tex);
+		}
+		else if (vars.has("r2::bitmap::path")) {
+			auto p = vars.getString("r2::bitmap::path");
+			auto td = rd::RscLib::getTextureData(p);
+			if(td) 
+				setTile(r2::Tile::fromTextureData(td), true);
+		}
+		else if (vars.has("rd::TileColor")) {
+
+		}
+		else {
+			rd::TilePackage tp;
+			if (tp.readFrom(vars)) {
+				rd::TileLib* lib = r2::im::TilePicker::getOrLoadLib(tp.lib);
+				if (lib) {
+					if( tile ) tile->setTexture(lib->tex);
+					double dx = tile->dx;
+					double dy = tile->dy;
+					lib->getTile(tp.group.c_str(), 0, 0, 0, tile);
+					tile->setCenterDiscrete(dx, dy);
+				}
+			}
 		}
 	}
 	if (_name) jr.visitObjectEnd(_name);
@@ -368,32 +431,6 @@ void rd::ABitmap::serialize(Pasta::JReflect & jr, const char * _name) {
 	
 };
 
-void r2::Graphics::serialize(Pasta::JReflect & jr, const char * _name) {
-	if (rd::Bits::is(nodeFlags, NF_SKIP_SERIALIZATION))
-		return;
-	if (_name) jr.visitObjectBegin(_name);
-	r2::Sprite::serialize(jr, nullptr);
-	jr.visit(geomColor, "geomColor");
-
-	Pasta::u32 nbTri = triangles.size();
-	jr.visit(nbTri, "nbTri");
-	if (jr.m_read&&nbTri) triangles.resize(nbTri);
-
-	//because visitArray doesn't like nested anymous objects
-	if (jr.visitArrayBegin("triangles", nbTri)){
-		for (Pasta::u32 i = 0; i < nbTri; ++i){
-			jr.visitIndexBegin(i);
-			jr.visitObjectBegin(nullptr);
-			jr.visit(triangles[i], nullptr);
-			jr.visitObjectEnd(_name, true);
-			jr.visitIndexEnd();
-		}
-	}
-	jr.visitArrayEnd("triangles");
-
-	if (_name) jr.visitObjectEnd(_name,true);
-};
-
 
 void r2::BatchElem::serialize(Pasta::JReflect& jr, const char* _name) {
 	if (rd::Bits::is(beFlags, NF_SKIP_SERIALIZATION))
@@ -466,22 +503,6 @@ void rd::ABatchElem::serialize(Pasta::JReflect& jr, const char* _name) {
 	if (_name) jr.visitObjectEnd(_name);
 }
 
-void r2::ColorMatrixControl::serialize(Pasta::JReflect* jr, const char* _name) {
-	if (_name) jr->visitObjectBegin(_name);
-
-	jr->visit(fresh, "fresh");
-	jr->visit((int&)mode, "mode");
-	jr->visit(hue, "hue");
-	jr->visit(sat, "sat");
-	jr->visit(val, "val");
-	jr->visit(tint, "tint");
-	jr->visit(ratioNew, "ratioNew");
-	jr->visit(ratioOld, "ratioOld");
-	jr->visit(mat, "mat");
-
-	if (_name) jr->visitObjectEnd(_name);
-}
-
 void r2::Text::serialize(Pasta::JReflect& f, const char* _name) {
 	if (rd::Bits::is(nodeFlags, NF_SKIP_SERIALIZATION))
 		return;
@@ -489,37 +510,53 @@ void r2::Text::serialize(Pasta::JReflect& f, const char* _name) {
 	r2::Batch::serialize(f, 0);
 	f.visit(bgColor,"bgColor");
 	f.visit(blockAlign,"blockAlign");
+	f.visit(italicBend, "italicBend");
 
+	auto& fntMan = rd::FontManager::get();
 	bool hasFont = fnt != 0;
 	f.visit(hasFont, "hasFont");
 	if (hasFont) {
-		string fontName;
+		std::string fontName = fntMan.getFontName(fnt);
 		f.visit(fontName, "fontName");
-		if(fontName.size())
-			setFont(rd::FontManager::get().getFont(fontName));
+		if(fontName.size() && f.isReadMode())
+			setFont(fntMan.getFont(fontName.c_str()));
 	}
 
 	f.visit(text, "text");
+	f.visit(translationKey, "translationKey");
+	if (f.isReadMode()) {
+		if (translationKey.empty())
+			setText(text);
+		else
+			tryTranslate();
+	}
 
-	bool hasDs = dropShadow != 0;
+	bool recache = false;
+	bool hasDs = dropShadow != nullopt;
 	f.visit(hasDs, "hasDropShadow");
 	if (hasDs) {
 		if (f.isReadMode())
-			dropShadow = new DropShadow();
+			dropShadow = DropShadow();
 		dropShadow->serialize(&f, "dropShadow");
+		if (f.isReadMode())
+			recache = true;
 	}
 
-	bool hasOutline = outline != 0;
+	bool hasOutline = outline != nullopt;
 	f.visit(hasOutline, "hasOutline");
 	if (hasOutline) {
 		if (f.isReadMode())
-			outline = new Outline();
+			outline = Outline();
 		outline->serialize(&f, "outline");
+		if (f.isReadMode())
+			recache = true;
 	}
 
 	f.visit(colors, "colors");
-	setText(text);
 	if (_name) f.visitObjectEnd(_name);
+
+	if (recache)
+		cache();
 }
 
 void r2::DropShadow::serialize(Pasta::JReflect* f, const char* _name) {

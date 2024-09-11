@@ -41,6 +41,13 @@ TileAnimPlayer* rd::ABatchElem::play(const Str& g, bool loop) {
 	return play(g.c_str(), loop);
 }
 
+TileAnimPlayer* rd::ABatchElem::play(const char* g, int nbPlay, bool loop) {
+	if (g) groupName = g;
+	auto pl = player.play(g,nbPlay);
+	if (loop) player.loop();
+	return pl;
+}
+
 TileAnimPlayer* rd::ABatchElem::play(const char * g, bool loop){
 	if (g) groupName = g;
 	auto pl = player.play(g);
@@ -56,6 +63,10 @@ TileAnimPlayer* ABatchElem::playAndLoop(const char * g) {
 
 void ABatchElem::replay(int nb){
 	player.play(groupName.c_str(), nb);
+}
+
+void ABatchElem::replayAndLoop() {
+    player.playAndLoop(groupName.c_str());
 }
 
 void rd::ABatchElem::stop(){
@@ -103,13 +114,11 @@ void ABatchElem::setCenterRatio(double px, double py){
 }
 
 
-void rd::ABatchElem::setSpeed(float val)
-{
+void rd::ABatchElem::setSpeed(float val){
 	player.speed = val;
 }
 
-void rd::ABatchElem::mulSpeed(float val)
-{
+void rd::ABatchElem::mulSpeed(float val){
 	player.speed *= val;
 }
 
@@ -141,12 +150,10 @@ ABatchElem * rd::ABatchElem::fromPool(const char * _groupName, TileLib * _lib, r
 
 void rd::ABatchElem::toPool(){
 	dispose();
-	rd::Pools::aelems.free(this);
+	rd::Pools::aelems.release(this);
 }
 
-void rd::ABatchElem::blendAdd(){
-	blendmode = Pasta::TT_ADD;
-}
+
 
 void rd::ABatchElem::setLib(TileLib* _lib){
 	this->lib = _lib;
@@ -189,24 +196,22 @@ void ABatchElem::set(TileLib * l, const char * g, int frame, bool stopAllAnims){
 		frameData = lib->getFrameData(groupName.c_str(), frame);
 
 		if (frameData == nullptr) {
-#ifdef _DEBUG
-			printf("ABE:unknown frame %s\n",groupName.c_str());
+#if 0
+			if(groupName.length())
+				trace("ABE:unknown frame "s + groupName.cpp_str());
 #endif
 			return;
 		}
 		
-		if(player.onFrame) player.onFrame(frame);
 		setFrame(frame);
 	}
 }
 
 void rd::ABatchElem::reset(){
-	SUPER::reset();
+	Super::reset();
 
-	if (!tile) {
-		setTile(rd::Pools::tiles.alloc());
-		ownsTile = true;
-	}
+	if (!tile) 
+		setTile(rd::Pools::tiles.alloc(),true);
 
 	player.reset();
 	
@@ -223,7 +228,8 @@ void rd::ABatchElem::reset(){
 	frameData = nullptr;
 	lib = nullptr;
 
-	groupName = "";
+	groupName.clear();
+	//setName("ABatchElem");
 }
 
 ABatchElem::ABatchElem(const ABatchElem& o) : BatchElem(o){
@@ -244,10 +250,12 @@ r2::BatchElem* rd::ABatchElem::clone(r2::BatchElem* nu) const{
 	anu->flippedY = flippedY;
 	anu->usePivot = usePivot;
 
-	anu->set(lib, groupName.c_str(), frame);
 	anu->player = player;
 	anu->player.spr = anu;
 
+	anu->set(lib, groupName.c_str(), frame);
+	anu->setCenterRatio(pivotX,pivotY);
+	
 	return anu;
 }
 
@@ -259,12 +267,23 @@ void ABatchElem::setFlippedY(bool onOff) {
 	flippedY = onOff;
 	syncTile();
 }
+
 bool ABatchElem::isFlippedX() {
 	return flippedX;
 }
+
 bool ABatchElem::isFlippedY() {
 	return flippedY;
 }
+
+ABatchElem* rd::ABatchElem::andDestroy(){
+	player.setOnEnd( [=](auto) {
+		rd::Garbage::trash(this);
+		return true;
+	});
+	return this;
+}
+
 void ABatchElem::dispose() {
 	SUPER::dispose();
 	player.dispose();
@@ -329,7 +348,7 @@ void ABatchElem::im() {
 		auto anm = player.getCurrentAnim();
 		bool isLoop = true;
 		if (anm)
-			isLoop = anm->plays > 1;
+			isLoop = (anm->plays == -1);
 		if (isLoop) {
 			ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
@@ -340,7 +359,7 @@ void ABatchElem::im() {
 		}
 		if (ImGui::Button(ICON_MD_LOOP)) {
 			isLoop = !isLoop;
-			if (anm) anm->plays = isLoop ? 666666666 : 1;
+			if (anm) anm->plays = isLoop ? -1 : 1;
 		}
 		ImGui::PopStyleColor(2);
 		ImGui::SameLine();
@@ -379,9 +398,14 @@ void ABatchElem::im() {
 			}
 		}
 
-		if (ImGui::DragFloat2("Pivot - ratio", (float*)&pivotX, 0.1f, -1.0f, 1.0f, "%0.2f")) {
+		if (Checkbox("Flip X", &flippedX)) 
+			setFlippedX(flippedX);
+		SameLine();
+		if (Checkbox("Flip Y", &flippedY))
+			setFlippedY(flippedY);
+		
+		if (ImGui::DragFloat2("Pivot - ratio", (float*)&pivotX, 0.1f, -1.0f, 1.0f, "%0.2f")) 
 			setCenterRatio(pivotX, pivotY);
-		}
 		ImGui::SameLine();
 		if (ImGui::Button(ICON_MD_UNDO))
 			setCenterRatio(0, 0);
@@ -394,10 +418,10 @@ void ABatchElem::im() {
 
 		if (anm) {
 			if (anm->groupName.length())
-				ImGui::Text(StrRef("Tile Group: ") + anm->groupName);
+				ImGui::Text( Str64f("Tile Group: ", anm->groupName));
 			else
 				if (anm->groupData)
-					ImGui::Text((std::string("Tile Group: ") + anm->groupData->id).c_str());
+					ImGui::Text( Str64f("Tile Group: %s", anm->groupData->id ));
 			double spMin = -1;
 			double spMax = 4;
 			ImGui::SetNextItemWidth(60);

@@ -1,22 +1,9 @@
 #include "stdafx.h"
 
-#include <vector>
-#include <algorithm>
-
 #include "r2/Sprite.hpp"
 #include "r2/BatchElem.hpp"
 #include "StaticBatch.hpp"
 #include "rs/GfxContext.hpp"
-#include <algorithm>
-
-#include "platform.h"
-#include "1-graphics/geo_vectors.h"
-#include "1-graphics/Graphic.h"
-#include "1-graphics/GraphicContext.h"
-#include "1-graphics/GraphicEnums.h"
-#include "1-graphics/ShaderProgram.h"
-#include "1-graphics/ShaderParam.h"
-#include "1-time/Profiler.h"
 
 using namespace r2;
 using namespace Pasta;
@@ -121,6 +108,7 @@ void rd::StaticBatch::draw(rs::GfxContext * _g) {
 }
 
 void rd::StaticBatch::add(r2::BatchElem * e) {
+	if (!e) return;
 	invalidate();
 	computed = false;
 	Batch::add(e);
@@ -136,9 +124,9 @@ void rd::StaticBatch::remove(r2::BatchElem * e) {
 	Batch::remove(e);
 }
 
-void rd::StaticBatch::free(r2::BatchElem * e) {
+void rd::StaticBatch::release(r2::BatchElem * e) {
 	invalidate();
-	Batch::free(e);
+	Batch::release(e);
 }
 
 void rd::StaticBatch::removeAllElements() {

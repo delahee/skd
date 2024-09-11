@@ -8,6 +8,7 @@
 #include "Data.hpp"
 #include "Game.hpp"
 
+using namespace rd;
 App_GameState* App_GameState::me = 0;
 
 static void updateTools();
@@ -26,7 +27,7 @@ static void bootGame(r2::Node * root) {
 
 void updateTools(){
 #ifdef PASTA_DEBUG
-	if (Input::isKeyboardKeyJustReleased(Pasta::Key::KB_F1)) {
+	if (rs::Input::isKeyboardKeyJustReleased(Pasta::Key::KB_F1)) {
 		r2::im::HierarchyExplorer::toggle(App_GameState::me->mainScene);
 	}
 #endif
@@ -39,21 +40,21 @@ static void regularBloom(PixelScene* dts, float durMs) {
 
 	dts->uber.bloomEnabled = true;
 	dts->uber.pyramidSize = 5;
-	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_INTENSITY, 0.14, TType::TEaseOut, durMs);
-	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_THRESH, 0.95, TType::TEaseOut, durMs);
-	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_KNEE, 0.60, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VBLOOM_INTENSITY, 0.14, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VBLOOM_THRESH, 0.95, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VBLOOM_KNEE, 0.60, TType::TEaseOut, durMs);
 
 	r::Color basicBiomeBloomColor(0.3f, 0.5, 0.4f);
 
 	r::Color c = basicBiomeBloomColor;
-	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CR, c.r, TType::TEaseOut, durMs);
-	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CG, c.g, TType::TEaseOut, durMs);
-	dts->tw.create(dts, (TVar)PixelScene::VBLOOM_CB, c.b, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VBLOOM_CR, c.r, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VBLOOM_CG, c.g, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VBLOOM_CB, c.b, TType::TEaseOut, durMs);
 
 	dts->uber.vignetteEnabled = true;
-	dts->tw.create(dts, (TVar)PixelScene::VVIGNETTE_INTENSITY, 1.07, TType::TEaseOut, durMs);
-	dts->tw.create(dts, (TVar)PixelScene::VVIGNETTE_SMOOTHNESS, 1.270, TType::TEaseOut, durMs);
-	dts->tw.create(dts, (TVar)PixelScene::VVIGNETTE_ROUNDNESS, 0.95, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VVIGNETTE_INTENSITY, 1.07, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VVIGNETTE_SMOOTHNESS, 1.270, TType::TEaseOut, durMs);
+	dts->tw.create(dts, (rs::TVar)PixelScene::VVIGNETTE_ROUNDNESS, 0.95, TType::TEaseOut, durMs);
 }
 
 void App_GameState::testUnit(){
@@ -162,7 +163,7 @@ void App_GameState::paint(Pasta::Graphic* g) {
 	auto color = r::Color(0.0f, 0.0f, 0.0f, 1.0f);
 #endif
 	auto clearAll = PASTA_CLEAR_COLOR | PASTA_CLEAR_DEPTH | PASTA_CLEAR_STENCIL;
-	Pasta::GraphicContext::GetCurrent()->clear(clearAll, color, GfxContext::MTX_DEFAULT_ZMIN());
+	Pasta::GraphicContext::GetCurrent()->clear(clearAll, color, rs::GfxContext::MTX_DEFAULT_ZMIN());
 
 	if (mainScene)
 		mainScene->render(g);

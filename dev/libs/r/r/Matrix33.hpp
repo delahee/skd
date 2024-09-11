@@ -1,7 +1,5 @@
-
 #pragma once
 
-#include <string>
 #include "Types.hpp"
 
 namespace r{
@@ -108,55 +106,15 @@ namespace r{
 			scale(x, y);
 		}
 
-		std::string toString() {
-			return std::string() + "(a=" + std::to_string(a) + ", b=" + std::to_string(b) + ", c=" + std::to_string(c) + ", d=" + std::to_string(d)
-				+ ", tx=" + std::to_string(tx) + ", ty=" + std::to_string(ty) + ")";
-		}
+		std::string toString();
 
 		r::Vector2 transformPoint(const r::Vector2 & point ) {
 			return Vector2(point.x * a + point.y * c + tx, point.x * b + point.y * d + ty);
 		}
 
-		inline void concat(const Matrix33 & m ){
-			float a1 = a * m.a + b * m.c;
-			b = a * m.b + b * m.d;
-			a = a1;
-
-			float c1 = c * m.a + d * m.c;
-			d = c * m.b + d * m.d;
-
-			c = c1;
-
-			float tx1 = tx * m.a + ty * m.c + m.tx;
-			ty = tx * m.b + ty * m.d + m.ty;
-			tx = tx1;
-		}
-
-		inline void concat22(const Matrix33& m) {
-			float a1 = a * m.a + b * m.c;
-			b = a * m.b + b * m.d;
-			a = a1;
-
-			float c1 = c * m.a + d * m.c;
-			d = c * m.b + d * m.d;
-
-			c = c1;
-		}
-
-		inline void concat32(float ma, float mb , float mc , float md , float mtx , float mty ) {
-			float a1 = a * ma + b * mc;
-			b = a * mb + b * md;
-			a = a1;
-
-			float c1 = c * ma + d * mc;
-			d = c * mb + d * md;
-
-			c = c1;
-
-			float tx1 = tx * ma + ty * mc + mtx;
-			ty = tx * mb + ty * md + mty;
-			tx = tx1;
-		};
+		void concat(const Matrix33& m);
+		void concat22(const Matrix33& m);
+		void concat32(float ma, float mb, float mc, float md, float mtx, float mty);;
 
 		inline r::Vector2 transformPoint2(float pointx, float pointy, r::Vector2* res) {
 			r::Vector2 tmp;

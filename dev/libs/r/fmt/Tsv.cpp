@@ -29,15 +29,34 @@ vector<std::string> Tsv::parse(std::string content, char sep) {
 	return vec;
 }
 
-std::vector<std::string> Tsv::extractLines(const char * file)
-{
+double Tsv::parsePercent(std::vector<std::string>& line, int idx, double dflt) {
+	if (idx < 0) return dflt;
+	double ret = dflt;
+	const auto& data = line[idx].data();
+	int nb = sscanf(data, "%lf%", &ret);
+	if (nb == 0)
+		return dflt;
+	return ret / 100.0;
+}
+
+float Tsv::parsePercent(std::vector<std::string>& line, int idx ,float dflt) {
+	if (idx < 0) return dflt;
+	float ret = dflt;
+	const auto& data = line[idx].data();
+	int nb = sscanf(data, "%f%", &ret);
+	if (nb == 0)
+		return dflt;
+	return float(ret / 100.0);
+}
+
+//todo convert all this to Str
+std::vector<std::string> Tsv::extractLines(const char * file){
 	string stdFile(file);
 	while (Pasta::TextMgr::replace(stdFile, "\r", ""));
 	return parse(stdFile.c_str(), '\n');
 }
 
-vector<std::string> Tsv::extractColumns(const char * line)
-{
+vector<std::string> Tsv::extractColumns(const char * line){
 	return parse(line, '\t');
 }
 
@@ -89,12 +108,12 @@ void Tsv::parseAndAssign(const string& path, std::function<void(vector<string>& 
 	parseAndAssign(path.c_str(),assign);
 }
 
-void Tsv::parseAndAssign(const char* path, std::function<void(vector<string> & _prm)> assign) {
+void Tsv::parseAndAssign(const char* path, std::function<void(vector<string>& _prm)> assign) {
 	char * content = rd::RscLib::getText(path);
 	if (content == nullptr)
 	{
 #ifdef _DEBUG
-		cout << "no such tsv file ? " << path << endl;
+		cout << "no such tsv file ? " << path << "\n";
 #endif
 		return;
 	}
@@ -105,30 +124,64 @@ void Tsv::parseAndAssign(const char* path, std::function<void(vector<string> & _
 		return;
 	}
 
-	for (string & l : lines) {
-		std::vector<string> columns = Tsv::extractColumns(l.c_str());
-		assign(columns);
+	for (string& l : lines) {
+		auto col = Tsv::extractColumns(l.c_str());
+		assign(col);
 	}
 
 	rd::RscLib::releaseText(content);
 }
 
-std::vector<Str> Tsv::parseIdentifierList(vector<std::string>& line, int idx) {
+eastl::vector<Str> Tsv::parseIdentifierList(vector<std::string>& line, int idx) {
 	if (idx < 0) return {};
 	const char* str = line[idx].c_str();
 	return rd::String::parseIdentifierList(str);
 }
 
-std::vector<Str> Tsv::parseIdentifierList(vector<Str>& line, int idx) {
+eastl::vector<Str> Tsv::parseIdentifierList(vector<Str>& line, int idx) {
 	if (idx < 0) return {};
 	const char * str = line[idx].c_str();
 	return rd::String::parseIdentifierList(str);
 }
 
-EnumList Tsv::parseEnums(std::vector<std::string>& line, int idx){
+rd::EnumList fmt::Tsv::parseEnums(const char* line, char delim){
+	return rd::Enum::parseEnumList(line, delim);
+}
+
+eastl::vector<int>	Tsv::parseIntList(std::vector<std::string>& line, int idx) {
 	if (idx < 0) return {};
 	const char* str = line[idx].c_str();
-	return rd::Enum::parseEnumList(str,',');
+	return rd::String::parseIntList(str);
+}
+
+eastl::vector<int> fmt::Tsv::parseIntList(std::vector<std::string>& line, int idx, const char* sep)
+{
+	if (idx < 0) return {};
+	const char* str = line[idx].c_str();
+	return rd::String::parseIntList(str,sep);
+}
+
+rd::EnumList Tsv::parseEnums(std::vector<std::string>& line, int idx, char delim){
+	if (idx < 0) return {};
+	const char* str = line[idx].c_str();
+	return rd::Enum::parseEnumList(str, delim);
+}
+
+r::Color Tsv::parseColor(const char * str) {
+	if( !str || !*str) return r::Color::White;
+	return rd::ColorLib::fromString(str);
+}
+
+r::Color Tsv::parseColor(std::vector<std::string>& line, int idx) {
+	if (idx < 0) return r::Color::White;
+	const char* str = line[idx].c_str();
+	return parseColor(str);
+}
+
+rd::Enum Tsv::parseValidatedEnum(std::vector<std::string>& line, int idx, rd::EnumConstructor* ctors){
+	rd::Enum val = parseEnum(line, idx);
+	val.validate(ctors);
+	return val;
 }
 
 rd::Enum Tsv::parseEnum(std::vector<std::string>& line, int idx) {

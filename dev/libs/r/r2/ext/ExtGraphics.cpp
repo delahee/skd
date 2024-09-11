@@ -241,6 +241,14 @@ void r2::ext::drawGradient(r2::Graphics* gfx, const r::Vector3& p0, const r::Vec
 		addQuad(colors[colors.size() - 1].first, 1.0f);
 }
 
+void r2::ext::drawParallelepiped(r2::Graphics* gfx, const r::Vector2& t0, const r::Vector2& t1, float size, float angleRad){
+	Vector2 angle(cos(angleRad), sin(angleRad));
+	Vector2 axis = angle * size;
+	float hsize = angle.y;
+	gfx->drawQuad(t0, t1 , t1 + 2 *axis, t0 + 2 * axis);
+}
+
+
 void r2::ext::drawLine(r2::Graphics*gfx, const Vector3 & p0, const Vector3 & p1, const r::Color & colorStart, const r::Color & colorEnd,float thicc) {
 	float lineThickness = thicc;
 	float x0 = p0.x; float y0 = p0.y;
@@ -276,6 +284,30 @@ void r2::ext::drawLine(r2::Graphics*gfx, const Vector3 & p0, const Vector3 & p1,
 	gfx->drawTriangle(tl);
 	gfx->drawTriangle(br);
 };
+
+void r2::ext::draw3DCircle(r2::Graphics* gfx, const r::Vector3& vtx, const r::Vector3& _up, const r::Vector3& _normal, float radius, const r::Color& col, int nbSegments , float thicc) {
+	if (nbSegments <= 0)	nbSegments = std::ceil(radius * 3.14f * 2 / 4);
+	if (nbSegments < 3)		nbSegments = 3;
+
+	Vector3 normal = _normal.getNormalized();
+	Vector3 up= _up.getNormalized();
+	Vector3 front = _up.cross(_normal).getNormalized();
+
+	const float angle = PASTA_PI * 2.0f / nbSegments;
+	for (int i = 0; i < nbSegments; i++) {
+		auto a0 = i * angle;
+		auto a1 = (i + 1) * angle;
+
+		//auto v = vtx + normal * radius;
+		Vector3 v = normal;
+		Vector3 r0 = v.getAroundAxisRotated(Vector3(0,0,0), front, r::Math::rad2Deg( a0 ));
+		Vector3 r1 = v.getAroundAxisRotated(Vector3(0,0,0), front, r::Math::rad2Deg( a1 ));
+		
+		Vector3 r0r = vtx + r0 * radius;
+		Vector3 r1r = vtx + r1 * radius;
+		drawLine(gfx, r0r, r1r, col, col, thicc);
+	}
+}
 
 void r2::ext::drawDisc(r2::Graphics* gfx, const Vector3& p, float radius, const r::Color& col, int nbSegments ) {
 	if (nbSegments <= 0)	nbSegments = std::ceil(radius * 3.14 * 2 / 4);

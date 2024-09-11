@@ -90,7 +90,7 @@ int seek(const vector<Lexem>& str, int start, const Lexem& tok ) {
 
 AstNode * Gram::parse(const vector<Lexem>& str, int pos) {
 	if (pos >= str.size())
-		return nullptr;
+		return new AstNode(AstNodeType::Sentence,"");
 
 	const Lexem& l = str[pos];
 	switch (l.type) {

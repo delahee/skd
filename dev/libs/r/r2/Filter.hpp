@@ -1,9 +1,6 @@
 #pragma once
 
-#include <string>
-#include <functional>
-
-#include <r2/RenderDoubleBuffer.hpp>
+#include "r2/RenderDoubleBuffer.hpp"
 
 //if you want to capture a single tile filter, you can pretty much just call filter tile
 namespace r2 {
@@ -12,11 +9,12 @@ namespace r2 {
 	enum class FilterType : u32 {
 		FT_NONE,
 		FT_BASE,
-		FT_LAYER,
+		FT_LAYER,//flatten the surface and don't transmit alpha
 		FT_BLUR,
 		FT_GLOW,
 		FT_BLOOM,
 		FT_COLORMATRIX,
+		FT_COPY,
 		
 		FT_COUNT,
 
@@ -36,9 +34,14 @@ namespace r2 {
 		bool					doRenderToBackbuffer = true;
 		bool					includeScale = false; //take local scale into account for capture size, useful for filtering text
 		TexFilter				texFilter = TexFilter::TF_NEAREST;
-		int						nbRender = 0;//filters are double buffered by default
+		FilterType				type = FilterType::FT_BASE;
 
-		std::string				name;
+		// Can be set to false to use a double buffer optimization but beware the delay may cause issues: 
+	// - when activated on a fast moving animation the user can see a slight stuttering
+	// - the zOffset is not accurate because of the delay for now (to fix, cf Sprite.cpp)
+		bool					isSingleBuffer = true; // default to true to avoid these issues for now, TODO look into that for the NX port
+
+		Str						name;
 
 		RenderDoubleBuffer*		forFlattening = nullptr;
 		RenderDoubleBuffer*		forFiltering = nullptr;
@@ -46,12 +49,11 @@ namespace r2 {
 		Bounds					flatteningBounds;
 		Node*					curNode = 0;
 
-		FilterType				type = FilterType::FT_BASE;
 								Filter();
 
 		virtual					~Filter();
 
-		bool					isEnabled() { return enabled; }
+		bool					isEnabled() const { return enabled; }
 		void					enable(bool onOff) { enabled = onOff; }
 
 		Bounds					getMyLocalBounds();
@@ -75,6 +77,7 @@ namespace r2 {
 		void					popBitmapOp();
 
 		bool					shouldComputeFilter();
+		virtual bool			shouldForceAlpha() { return false; };
 		void					compute(rs::GfxContext * g, Node* n);
 		Tile*					getResult();
 
@@ -85,6 +88,9 @@ namespace r2 {
 
 		virtual void			serialize(Pasta::JReflect& jr, const char* name);
 		virtual Filter*			clone(r2::Filter* obj = 0);
+
+        int						getPadding() { return flattenPadding; };
+		int						nbRender = 0; // todo replace this by a isFilterReady() or something like that
 	protected:
 		bool					debugFilter = false;
 		Tile*					result = nullptr;
@@ -107,6 +113,5 @@ namespace r2 {
 		Matrix44				fdebugProj;
 		Matrix44				fdebugModel;
 		Matrix44				fdebugView;
-		
 	};
 }

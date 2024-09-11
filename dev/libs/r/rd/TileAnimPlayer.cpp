@@ -1,12 +1,34 @@
 #include "stdafx.h"
 
-#include "../rs/all.hpp"
 #include "TileAnim.hpp"
 #include "TileAnimPlayer.hpp"
-#include "Pools.hpp"
 
 using namespace std;
 using namespace rd;
+
+void rd::AnimBus::update() {
+	finalSpeed = speed;
+	if (parent) {
+		parent->update();
+		finalSpeed *= parent->finalSpeed;
+	}
+	if (finalSpeed > maxSpeed)
+		finalSpeed = maxSpeed;
+	if (finalSpeed < minSpeed)
+		finalSpeed = minSpeed;
+}
+
+void rd::AnimBus::im() {
+	using namespace ImGui;
+	PushID(this);
+	if (!name.empty())
+		Text(name.c_str());
+	DragDouble("min speed", &minSpeed,0.1,0.0f,8.0f);
+	DragDouble("max speed", &maxSpeed,0.1,0.0f,8.0f);
+	DragDouble("bus speed", &speed,0.1,0.0f,8.0f);
+	Value("final speed", finalSpeed);
+	PopID();
+}
 
 TileAnim * TileAnimPlayer::getCurrentAnim() {
 	if (stack.size() == 0)
@@ -19,7 +41,7 @@ bool TileAnimPlayer::isFinished() {
 	auto anm = getCurrentAnim();
 	if (!anm)
 		return true;
-	return anm->plays <= 0;
+	return anm->plays == 0;
 }
 
 void TileAnimPlayer::update(double dt) {
@@ -42,7 +64,7 @@ TileAnimPlayer& rd::TileAnimPlayer::operator=(const TileAnimPlayer& ot){
 	needUpdates = ot.needUpdates;
 	destroyed = false;
 	isPlaying = ot.isPlaying;
-	stack = rs::Std::map < rd::TileAnim*, rd::TileAnim* > (ot.stack, [](rd::TileAnim* a) {
+	stack = rs::Std::map<rd::TileAnim*, rd::TileAnim* > (ot.stack, [](rd::TileAnim* a) {
 		auto na = rd::Pools::anims.alloc();
 		na->copy(*a);
 		return na;
@@ -64,7 +86,7 @@ rd::TileAnimPlayer::~TileAnimPlayer() {
 		ext = nullptr;
 	}
 	for (auto anim : stack)
-		rd::Pools::anims.free(anim);
+		rd::Pools::anims.release(anim);
 	stack.clear();
 }
 
@@ -80,7 +102,7 @@ TileAnimPlayer * TileAnimPlayer::chainAndLoop(const char * k) {
 
 TileAnimPlayer * TileAnimPlayer::loop() {
 	if (hasAnim())
-		getLastAnim()->plays = 666666666;
+		getLastAnim()->plays = -1;
 	return this;
 }
 
@@ -88,7 +110,7 @@ TileAnimPlayer * TileAnimPlayer::playAndLoop(const char * k) {
 	return play(k)->loop();
 }
 
-TileAnimPlayer *  TileAnimPlayer::play(const char * group, int nbPlays, bool queueAnim ) {
+TileAnimPlayer * TileAnimPlayer::play(const char * group, int nbPlays, bool queueAnim) {
 	if (!isReady()) return this;
 
 	lib = spr->getLib();
@@ -111,7 +133,7 @@ TileAnimPlayer *  TileAnimPlayer::play(const char * group, int nbPlays, bool que
 
 	TileAnim * a = rd::Pools::anims.alloc();
 	a->libName = lib->name.c_str();
-	a->reset(group, g,0, 0, nbPlays, false, 1.0);
+	a->reset(group, g, 0, 0, nbPlays, false, 1.0);
 	
 	isPlaying = true;
 	stack.push_back(a);
@@ -127,7 +149,7 @@ int rd::TileAnimPlayer::getFrameNumber() {
 	TileAnim* a = getCurrentAnim();
 	if (!a) return 0; 
 	if (!a->groupData) return 0; 
-	return a->cursor;
+	return a->groupData->anim[a->cursor];
 }
 
 int rd::TileAnimPlayer::getCursor() {
@@ -147,8 +169,8 @@ void rd::TileAnimPlayer::setFrame(int frame){
 			}
 
 		if (cursor >= 0) {
-			spr->setFrame(frame);
 			a->cursor = cursor;
+			spr->setFrame(a->cursor);
 			if (onFrame) onFrame(a->cursor);
 		}
 		else {
@@ -164,13 +186,12 @@ void rd::TileAnimPlayer::setCursor(int cursor){
 		spr->setFrame(a->cursor);
 		if (onFrame) onFrame(a->cursor);
 	}
-	//else ?
 }
 
 double rd::TileAnimPlayer::getFinalAnimSpeed() {
 	double libSpeed = lib ? lib->speed : 1.0;
 	if (bus != nullptr)
-		libSpeed *= bus->speed;
+		libSpeed *= bus->getFinalSpeed();
 	return libSpeed * speed * getCurrentAnim()->speed;
 }
 
@@ -187,24 +208,25 @@ void rd::TileAnimPlayer::unsync(){
 }
 
 void rd::TileAnimPlayer::dispose(){
+	onFrame = {};
 	destroyed = true;
 	if (!stack.size()) return;
 
 	for (auto anim : stack)
-		rd::Pools::anims.free(anim);
+		rd::Pools::anims.release(anim);
 
 	stack.clear();
 	bus = nullptr;
 	if (ext)ext->reset();
 }
 
-void rd::TileAnimPlayer::reset()
-{
-	dispose();
+void rd::TileAnimPlayer::reset(){
+	bus = 0;
 	needUpdates = true;
 	destroyed = false;
 	isPlaying = false;
 	speed = 1.0;
+	dispose();
 }
 
 void rd::TileAnimPlayer::copy(TileAnimPlayer&toCopy)
@@ -231,7 +253,11 @@ void rd::TileAnimPlayer::syncCursorToSpr(){
 	if (a) {
 		a->cursor = clamp<int>(a->cursor, 0, a->nbFrames() - 1);
 		spr->setFrame(a->cursor);
+		if (onFrame) onFrame(a->cursor);
 	}
+}
+
+void rd::TileAnimPlayer::dumpState(){
 }
 
 float TileAnimPlayer::getDuration() {
@@ -245,15 +271,35 @@ float TileAnimPlayer::getDuration() {
 void TileAnimPlayer::initCurrentAnim() {
 	auto a = getCurrentAnim();
 	spr->set(nullptr, a->groupName.c_str(), 0);
+	if (onFrame) {
+		if(a->groupData->anim.size())
+			onFrame(a->groupData->anim[0]);
+		else 
+			onFrame(0);
+	}
+
+	if (debug && a) {
+		if (rd::String::containsI(a->groupName, "idle"))
+			int here = 0;
+		history.push_back(*a);
+	}
+
 }
 
 void TileAnimPlayer::_update(double dt){
 	double libSpeed  = lib ? lib->speed : 1.0;
 	auto cur = getCurrentAnim();
-	if (cur != nullptr && !cur->paused && isPlaying ) {
+
+	if (cur && !cur->paused && isPlaying ) {
+		if (cur->delayMs > 0) {
+			cur->delayMs-= dt * 1000.0;
+			if (cur->delayMs < 0) cur->delayMs = 0;
+			return;
+		}
+
 		TileAnim & a = *cur;
-		float rframe = dt * frameRate;
-		float fspeed = getFinalAnimSpeed();
+		double rframe = dt * frameRate;
+		double fspeed = getFinalAnimSpeed();
 		a.curFrameCount += fspeed * rframe;
 
 		while (a.curFrameCount > 1) {
@@ -261,45 +307,42 @@ void TileAnimPlayer::_update(double dt){
 			a.cursor++;
 
 			if (a.cursor >= a.nbFrames()) {
-				a.cursor = 0;
-				a.plays--;
-				if (a.plays <= 0) {
+                if (a.plays > 0)
+                    a.plays--;
 
+                bool animContinue = a.plays == -1 || a.plays > 0; // continue if loop or if there is 1+ more play remaining
+
+				if (animContinue) {
+                    a.cursor = 0;
+                    if (a.onLoop != nullptr) {
+                        auto cb = a.onLoop;
+                        a.onLoop = nullptr;
+                        if (cb(this))
+                            return;
+                    }
+				} else {
 					if (ext) ext->onAnimEnd.trigger();
 
 					if (a.onEnd != nullptr) {
 						auto cb = a.onEnd;//copy is voluntary
 						a.onEnd = nullptr;
-						bool interruptAll = cb(this);
-						if (interruptAll) {
+						if (cb(this))
 							return;
-						}
 					}
 					
 					if (hasAnim())
 						nextAnim();
-
-					if (!hasAnim()) 
+					else
 						break;
-				}
-				else {
-					bool force = false;
-					if (a.nbFrames() == 1)
-						force = true;
 
-					if (force || (spr->getFrame() != a.cursor)) {
-						if (ext) ext->onAnimFrame.trigger();
-						if (onFrame) onFrame(a.cursor);
-						spr->setFrame(a.cursor);
-					}
+					continue;
 				}
 			}
-			else {
-				if (spr->getFrame() != a.cursor) {
-					if (ext) ext->onAnimFrame.trigger();
-					if (onFrame) onFrame(a.cursor);
-					spr->setFrame(a.cursor);
-				}
+
+			if (spr->getFrame() != a.cursor) {
+				spr->setFrame(a.cursor);
+				if (onFrame) onFrame(a.cursor);
+				if (ext) ext->onAnimFrame.trigger();
 			}
 		}
 	}
@@ -327,7 +370,7 @@ void TileAnimPlayer::pause() {
 void TileAnimPlayer::stop(){
 	isPlaying = false;
 	for(auto anim : stack)
-		rd::Pools::anims.free(anim);
+		rd::Pools::anims.release(anim);
 	stack.clear();
 }
 
@@ -335,16 +378,14 @@ bool TileAnimPlayer::hasAnim(){
 	return stack.size()>0;
 }
 
-void rd::TileAnimPlayer::nextAnim()
-{
+void rd::TileAnimPlayer::nextAnim(){
 	auto cur = getCurrentAnim();
 
-	//dispose after play ?
-
+	
 	{
 		TileAnim * anm = stack.at(0);
 		anm->clear();
-		rd::Pools::anims.free(anm);
+		rd::Pools::anims.release(anm);
 		stack.erase(stack.begin());
 	}
 
@@ -370,10 +411,21 @@ void rd::TileAnimPlayer::addOnEnd(std::function<bool(rd::TileAnimPlayer*)> fun) 
 }
 
 void rd::TileAnimPlayer::setOnEnd( std::function<bool(rd::TileAnimPlayer *)> fun){
-	if (stack.size() == 0)
+	if (stack.size() == 0) {
+		fun(this);//whoops no anim let's fulfill contract
 		return;
+	}
 	
 	getLastAnim()->onEnd = fun;
+}
+
+void rd::TileAnimPlayer::setOnLoop(std::function<bool(rd::TileAnimPlayer*)> fun) {
+	if (stack.size() == 0) {
+		fun(this);//whoops no anim let's loop already... but once?
+		return;
+	}
+
+    getLastAnim()->onLoop = fun;
 }
 
 TileAnim * TileAnimPlayer::getLastAnim(){
@@ -389,10 +441,15 @@ void TileAnimPlayer::im() {
 	if (!cur) {
 		ImGui::Text("no animation...");
 		return;
-	}
+    }
+    ImGui::PushID("TileAnimPlayer");
+	Checkbox("debug", &debug);
 	Text("%d / %d", cur->cursor + 1, cur->nbFrames());
 	Value("Duration", getDuration());
-	Value("Nb Plays", cur->plays);
+    if (cur->plays == -1)
+        Text("Loop");
+	else
+		Value("Nb Plays", cur->plays);
 
 	if (!isPlaying) {
 		if (Button(ICON_MD_PLAY_ARROW)) 
@@ -428,12 +485,19 @@ void TileAnimPlayer::im() {
 		pause();
 		syncCursorToSpr();
 	}
-
 	
 	if (isPlaying) {
 		SameLine();
 		Text("Playing");
 	}
+
+	if(history.size())
+	if (TreeNode("History")) {
+		for (auto& a : history) 
+			a.im();
+		TreePop();
+	}
+	ImGui::PopID();
 }
 
 void rd::TileAnimPlayerExtension::reset()

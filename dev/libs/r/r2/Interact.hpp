@@ -5,25 +5,27 @@
 
 namespace r2 {
 
-	typedef std::vector< std::function<void(rs::InputEvent &)> > EventHandlers;
+	typedef std::function<void(rs::InputEvent&)> EventHandler;
+	typedef eastl::vector<EventHandler> EventHandlers;
 
 	/**
 	* general ideas
 	* collect all interacts in depth order
 	*/
 	class Interact : public r2::Node {
-
-	public:
-		float				rectWidth = 0.f;
-		float				rectHeight = 0.f;
+		typedef r2::Node Super;
 
 	public:
 		bool				enabled					= true;
+		float				rectWidth = 0.f;
+		float				rectHeight = 0.f;
+		bool				boundlessInteract		= false; // disable bound checking & make local bound empty
+
+	public:
 		float				isMouseDown				= false;
 		float				mouseClickedDuration	= -1.0f;
 
 		bool				wasInside				= false;
-		bool				disableBounds			= false;
 
 		r2::EventHandlers	onMouseButtonDowns;
 		r2::EventHandlers	onMouseButtonUps;
@@ -41,6 +43,8 @@ namespace r2 {
 		r2::EventHandlers	onKeyDowns		;
 
 		r2::EventHandlers	onChars			;
+
+		r2::EventHandlers	tmp;
 
 	public:
 							Interact(r2::Node * parent = nullptr);
@@ -93,5 +97,7 @@ namespace r2 {
 		std::function<bool(const rs::InputEvent& ev)>
 							doAcceptEventFunc;
 		bool				doesAcceptEvent(const rs::InputEvent& ev);
+
+		static r2::Interact*fromPool(r2::Node* parent, int w, int h);
 	};//End Interact
 }//End r2

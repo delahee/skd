@@ -16,4 +16,8 @@ std::string rplatform::getLocalAppData() {
 void shellExecuteOpen(const char*){
 	return;
 }
+
+void rplatform::getCallStack(std::string& out) {
+
+}
 #endif

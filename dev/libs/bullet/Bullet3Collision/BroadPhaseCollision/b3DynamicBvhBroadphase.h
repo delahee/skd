@@ -12,7 +12,7 @@ subject to the following restrictions:
 2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.
 */
-
+#pragma once
 ///b3DynamicBvhBroadphase implementation by Nathanael Presson
 #ifndef B3_DBVT_BROADPHASE_H
 #define B3_DBVT_BROADPHASE_H

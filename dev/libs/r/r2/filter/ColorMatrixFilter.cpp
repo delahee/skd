@@ -10,16 +10,16 @@ using namespace r2::filter;
 static string colMatrixPrmName = string("uColorMatrix");
 
 #define SUPER r2::filter::Layer
-r2::filter::ColorMatrix::ColorMatrix() : Layer(){
+r2::filter::ColorMatrix::ColorMatrix() : SUPER(){
 	type = FilterType::FT_COLORMATRIX;
 
-	ctrl.mode = ColorMatrixMode::CMM_Matrix;
+	ctrl.mode = ColorMatrixMode::Matrix;
 	mat = &ctrl.mat;
 	ctrl.mat = Pasta::Matrix44::identity;
 	pushBitmapOp([=](r2::Bitmap&bmp) { bmpOp(bmp); });
 }
 
-r2::filter::ColorMatrix::ColorMatrix(const Pasta::Matrix44 & _mat) : Layer(){
+r2::filter::ColorMatrix::ColorMatrix(const Pasta::Matrix44 & _mat) : SUPER(){
 	type = FilterType::FT_COLORMATRIX;
 
 	setMatrix(_mat);
@@ -43,12 +43,15 @@ void r2::filter::ColorMatrix::setMatrix(const Pasta::Matrix44 * _mat){
 	mat = _mat;
 }
 
+void r2::filter::ColorMatrix::invalidate() {
+	Super::invalidate();
+}
+
 void r2::filter::ColorMatrix::setHSV(float hue,float sat,float val){
 	rd::ColorLib::colorHSV(ctrl.mat, hue, sat, val);
 	ctrl.mat = ctrl.mat.transpose();
 	invalidate();
 }
-
 
 r2::Filter* r2::filter::ColorMatrix::clone(r2::Filter* _obj) {
 	ColorMatrix* obj = (ColorMatrix*)_obj;
@@ -62,6 +65,7 @@ r2::Filter* r2::filter::ColorMatrix::clone(r2::Filter* _obj) {
 void r2::filter::ColorMatrix::serialize(Pasta::JReflect& jr, const char* name) {
 	if (name) jr.visitObjectBegin(name);
 	SUPER::serialize(jr, 0);
-	ctrl.serialize(&jr,"ctrl");
+	jr.visit(ctrl, "ctrl");
 	if (name) jr.visitObjectEnd(name);
 }
+#undef SUPER

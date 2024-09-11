@@ -44,20 +44,21 @@ include(enginePath .. "premake/pastaproject")
 include(rlibPath .. "/rlib")
 
 function stdWin()
-	filter {"system:windows", "action:vs*"}
-			systemversion "latest"
-			buildoptions {
-				"/bigobj",
-				"/Qpar",
-				"/openmp",
-				"/MP",
-			}
+	filter {"platforms:x64"}
+		systemversion "latest"
+		buildoptions {
+			"/bigobj",
+			"/Qpar",
+			"/openmp",
+		}
+		flags { "MultiProcessorCompile" }
+		cppdialect "C++17"
 	filter {}
 end 
 
 solution "App"
 	
-	defines { "HBC_DT_TOOLS" }
+	defines { "HBC_DT_TOOLS" ,"R_USE_STACKWALKER"}
 	platforms { "x64" }	--	Supported platforms (Win32, x64, ORBIS, Durango...)
 	configurations { "Debug", "DebugOpt", "Release", "Final" }	--	Supported configurations
 	startproject "App"
@@ -110,6 +111,11 @@ solution "App"
 			"libs/tb64",
 			"libs/h264"
 		}
+		filter "platforms:x64"
+			includedirs {
+				"libs/stackwalker"
+			}
+		filter{}
 		
 		files {
 			"src/**.h",
@@ -125,21 +131,6 @@ solution "App"
 		shaderdirs { "../res/" }
 	
 		stdWin()
-			
-		filter "platforms:Win32" 
-			libdirs {
-				"libs/fmod/core/lib/x86",
-				"libs/fmod/studio/lib/x86",
-			}
-			links {
-				"fmod_vc",
-				"fmodstudio_vc"
-			}
-			postbuildcommands { 
-				"rsync -ar --del --force ../../libs/fmod/core/lib/x86/fmod.dll \"$(OutDir)fmod.dll\" ",
-				"rsync -ar --del --force ../../libs/fmod/studio/lib/x86/fmodstudio.dll \"$(OutDir)fmodstudio.dll\" " 
-			}
-		
 		
 		filter "platforms:x64"
 			libdirs {
@@ -152,8 +143,8 @@ solution "App"
 			}
 			
 			postbuildcommands { 
-				"rsync -ar --del --force ../../libs/fmod/core/lib/x64/fmod.dll \"$(OutDir)fmod.dll\" ",
-				"rsync -ar --del --force ../../libs/fmod/studio/lib/x64/fmodstudio.dll \"$(OutDir)fmodstudio.dll\" " 
+				"xcopy /f/y/d/i ..\\..\\libs\\fmod\\core\\lib\\x64\\fmod.dll \"$(OutDir)\" ",
+				"xcopy /f/y/d/i ..\\..\\libs\\fmod\\studio\\lib\\x64\\fmodstudio.dll \"$(OutDir)\" "
 			}
 			
 		
@@ -197,8 +188,9 @@ solution "App"
 			
 		filter {}
 		
+		stdWin() -- cppdialect in this
 		language "C++"
-		cppdialect "C++17"
+			
 		filter "action:vs*" -- Keep variables evaluated by VS so all paths are the same in VS ui
 			targetdir "bin/$(Platform)/$(Configuration)"
 		filter "action:not vs*"
@@ -214,8 +206,40 @@ solution "App"
 		}
 		defines { "NO_AVX" }
 		defines { "NO_AVX2" }
-		
+	
+	project("stackwalker")
+		debugdir "."
+		kind "StaticLib"
+		filter "configurations:Debug"
+			optimize "Speed"
+			runtime "Debug"
+		filter "configurations:DebugOpt"
+			optimize "Speed"
+			runtime "Debug"
+		filter "configurations:Release"
+			runtime "Release"
+			optimize "Speed"
+		filter {}
+		language "C++"
+		cppdialect "C++17"
+		filter "action:vs*" -- Keep variables evaluated by VS so all paths are the same in VS ui
+			targetdir "bin/$(Platform)/$(Configuration)"
+		filter "action:not vs*"
+			targetdir "bin/%{cfg.platform}/%{cfg.buildcfg}"
+		filter {}
+		usePrecompiledHeaders = false
+		files {
+			"libs/stackwalker/**.h",
+			"libs/stackwalker/**.c",
+			"libs/stackwalker/**.cpp",
+		}
+		includedirs {
+			"libs/stackwalker"
+		}
+		defines { "NO_AVX" }
+		defines { "NO_AVX2" }
 		stdWin()
+	filter {}
 		
 	project("h264")
 		debugdir "."
@@ -235,8 +259,8 @@ solution "App"
 			
 		filter {}
 		
+		stdWin() -- cppdialect in this
 		language "C++"
-		cppdialect "C++17"
 		filter "action:vs*" -- Keep variables evaluated by VS so all paths are the same in VS ui
 			targetdir "bin/$(Platform)/$(Configuration)"
 		filter "action:not vs*"
@@ -270,6 +294,7 @@ solution "App"
 			
 		filter {}
 		
+		stdWin()
 		language "C++"
 		cppdialect "C++14"
 		filter "action:vs*" -- Keep variables evaluated by VS so all paths are the same in VS ui
@@ -282,10 +307,14 @@ solution "App"
 			"libs/bullet/**.h",
 			"libs/bullet/**.cpp",
 		}
+		removefiles { 
+			"libs/bullet/btBulletCollisionAll.cpp",
+			"libs/bullet/btBulletDynamicsAll.cpp",
+			"libs/bullet/btLinearMathAll.cpp"
+		}
 		includedirs {
 			"libs/bullet"
 		}
-		stdWin()
 		filter {"system:windows"}
 			vectorextensions "SSE3"
 			defines { "BT_USE_SSE_IN_API","BT_USE_DOUBLE_PRECISION" }

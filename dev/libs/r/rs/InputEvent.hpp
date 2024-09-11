@@ -1,13 +1,8 @@
 #pragma once
 
-#include <algorithm>
-#include <string>
-
 #include "1-input/InputEnums.h"
-#include <optional>
 
 namespace rs{
-
 	enum MouseButton {
 		BUTTON_NONE = 0,
 		BUTTON_LEFT = 1,
@@ -35,21 +30,27 @@ namespace rs{
 		EIK_Character	,//keyboard
 	};
 
+	enum InputOrigin : int{
+		Unknown,
+		Mouse,
+		Touch,
+		Pad,
+		Keyboard,
+		Simulation,
+	};
+
 	class InputEvent {
 
 	public:
-		InputEventKind kind		= InputEventKind::EIK_Simulated;
+		rs::InputEventKind		kind		= rs::InputEventKind::EIK_Simulated;
+		rs::InputOrigin			origin		= rs::InputOrigin::Simulation;
 
 		std::optional<bool>		stopPropagation	= std::nullopt;
 
 		float relX				= 0.f;
 		float relY				= 0.f;
 		float wheelDelta		= 0.f;
-		
 
-		/// <summary>
-		/// mask on BUTTON_NONE / BUTTON_LEFT / BUTTON_MIDDLE / BUTTON_RIGHT
-		/// </summary>
 		int button				= BUTTON_NONE;
 		int touchId				= 0;
 		int keyCode				= 0;
@@ -58,15 +59,19 @@ namespace rs{
 
 		Pasta::Key native		= Pasta::Key::PAD_BEGIN_ENUM;
 
+		InputEvent() {};
 		InputEvent(InputEventKind k, float x = 0., float y = 0.);
+		InputEvent(const InputEvent& elem);
 
-		std::string toString();
-		~InputEvent();
-		InputEvent(const InputEvent & elem);
-		bool isGeometricEvent();
+		std::string	toString();
 
-		bool isLeftClick() { return button & BUTTON_LEFT; };
-		bool isRightClick() { return button & BUTTON_RIGHT; };
-		bool isMiddleClick() { return button & BUTTON_MIDDLE; };
+				~InputEvent();
+		bool	isGeometricEvent();
+
+		bool	isLeftClick() { return button & BUTTON_LEFT; };
+		bool	isRightClick() { return button & BUTTON_RIGHT; };
+		bool	isMiddleClick() { return button & BUTTON_MIDDLE; };
+
+		static rs::InputOrigin resolveOrigin(Pasta::ControllerType ct);
 	};
 }

@@ -1,18 +1,15 @@
 #pragma once
 
-#include <string>
-
-#include "Tile.hpp"
-#include "Batch.hpp"
-
-#include "1-graphics/GraphicEnums.h"
-#include "1-graphics/geo_vectors.h"
+namespace r2 { 
+	class Batch; 
+	class Bitmap; 
+}
 
 enum class BeType : u32 {
 	BET_BATCH_ELEM,
 	BET_ABATCH_ELEM,
-
-	BET_BATCH_ELEM_VARS,
+	BET_SUB_BATCH_ELEM,
+	BET_SUB_ABATCH_ELEM,
 
 	BET_USER = 1 << 16,
 };
@@ -22,42 +19,41 @@ namespace r2 {
 	class BatchElem : public rs::ITweenable {
 	public:
 		friend class			Batch;
-
+		
+		//please consider aligning vars on 32bits, beware header order is designed, don't reorder without cache awareness please
 		bool					useSimpleZ = true;
 		bool					visible = true;
 		bool					ownsTile = false;
 		bool					destroyed = false;
+		//if you had a bool, please pad on 32bits 
 
 		r::u32					beFlags = 0;//see NF_flags
+		r::TransparencyType		blendmode = r::TransparencyType::TT_INHERIT;
 
 		//we can use float here because it's up to matrices to build group translation so we shouldn't suffer from approx here
 		float					x = 0.0f;
 		float					y = 0.0f;
 		float					z = 0.0f;
+		float					alpha = 1.0f;
 
 		float					scaleX = 1.0f;
 		float					scaleY = 1.0f;
 		float					rotation = 0.0f;
-
-		float					alpha = 1.0f;
-
-		std::string				name;
-		uint64_t				uid = 0;
-
-		r::Color				color = r::Color(1.0f, 1.0f, 1.0f, 1.0f);
-
 		float					zTopOffset = 0.0f;
 		float					zBottomOffset = 0.0f;
+		
+		double					priority = 0.0;
+		uint64_t				uid = 0;
 
+		Batch*					batch = nullptr;
+		Tile*					tile = nullptr;
 		BatchElem*				next = nullptr;
 		BatchElem*				prev = nullptr;
-
-		void*					userdata = 0;
-		double					priority = 0.0;
-		Tile*					tile = nullptr;
-	public:
-		Pasta::TransparencyType blendmode = Pasta::TransparencyType::TT_INHERIT;
-								Batch* batch = nullptr;
+		
+		rd::Vars				vars;//basically a ptr
+		
+		Str						name;
+		r::Color				color;
 
 								BatchElem();
 								BatchElem(Tile* tile, Batch* parent = nullptr, double priority = 0);
@@ -100,16 +96,19 @@ namespace r2 {
 
 		virtual void			update(double dt) {}; //only here for customization purpose
 
-		void					setTile(r2::Tile* t);
+		void					setTile(r2::Tile* t, bool own = false);
 		Tile*					getTile() { return tile; };
+
+		void					setName(const char* _name);
 
 		inline Pasta::Texture* getTexture() {
 			if (!tile) return nullptr;
 			return tile->getTexture();
 		};
 
-		//use destroy which knows how to send data to pools properly ( or not )
-		//virtual void			toPool();
+		void					blendAdd();
+		void					blendAlpha();
+
 
 		virtual r2::BatchElem*	clone(r2::BatchElem* nu = nullptr) const;
 		virtual void			im();
@@ -129,6 +128,9 @@ namespace r2 {
 
 		void					load(const r2::Bitmap* src);
 		static BatchElem*		fromPool(rd::TileLib* lib, const char * group, r2::Batch* batch = nullptr);
+		static BatchElem*		fromLib(rd::TileLib* lib, const char* group, r2::Batch* batch = nullptr) {
+			return r2::BatchElem::fromPool(lib, group, batch);
+		};
 	};
 }
 

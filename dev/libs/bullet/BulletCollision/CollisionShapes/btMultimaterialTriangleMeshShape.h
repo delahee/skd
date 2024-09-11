@@ -14,7 +14,7 @@ subject to the following restrictions:
 */
 
 /// This file was created by Alex Silverman
-
+#pragma once
 #ifndef BT_BVH_TRIANGLE_MATERIAL_MESH_SHAPE_H
 #define BT_BVH_TRIANGLE_MATERIAL_MESH_SHAPE_H
 

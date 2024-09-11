@@ -1,40 +1,21 @@
 #pragma once
 
-#include <sol/sol.hpp>
+namespace sol {
+	class state;
+};
+
 #include "Agent.hpp"
 
 namespace rd {
-	template <typename T>
-	class PointerWrapper {
-		T* ptr;
-		int maxSize = 1;
-	public:
-		PointerWrapper() { ptr = new T(); maxSize = 1; }
-		PointerWrapper(int size) { ptr = new T[size]; maxSize = size; }
-		~PointerWrapper() { delete ptr; }
+	class LuaScriptHost : public rd::Agent {
+		typedef rd::Agent Super;
 
-		T* GetPtr() { return ptr; }
-		void* GetVoidPtr() { return ptr; }
-		int GetSize() { return maxSize; }
-
-		T Get() { return *ptr; }
-		T GetAt(int index) { return ptr[index]; }
-		void Set(T value) { *ptr = value; }
-		void SetAt(int index, T value) { ptr[index] = value; }
-
-		void MemSet(T value) { memset(ptr, value, maxSize * sizeof(T)); }
-		void MemSet(T value, int size) { memset(ptr, value, size * sizeof(T)); }
-		void MemCpy(const T* src, int size) { memcpy(ptr, src, size * sizeof(T)); }
-		void StrCpy(const T* src) { strcpy(ptr, src); }
-	};
-
-	class LuaScriptHost : public Agent {
-		bool					deleteAsked = false;
+        bool						deleteAsked = false;
+        eastl::vector<r2::Node*>	destroyList;
 	public:
 		static bool				globalStateInit;
 		std::string				defaultFunc;
 
-		static sol::state		luaEngine;
 		sol::environment		localEnvironment;
 		sol::unsafe_function	funcRun;
 		bool					evalEachFrame = false;
@@ -48,25 +29,36 @@ namespace rd {
 		float					DELTA_CHECK = 0.1f;
 		float					checkProgress = 0.0f;
 
-		rd::Tweener				tw;
-
 		Sig						onBeforeEval;
+		Sig						onDestruction;
 		Sig						onAfterContextCreation;
 		Sig						onAfterEval;
+		Sig						onBuildContext;
 
-		std::function<void(const std::string & err)>					log;
+		std::function<void(const std::string & err)>					
+								log;
 	public:
 								LuaScriptHost(const std::string & _scriptPath, AgentList * _al, std::string _defaultFunc = "run");
 		virtual					~LuaScriptHost();
 
+		sol::state&				getEngine();
 		virtual void			buildContext();
+		virtual void			updateContext(sol::state& luaSol);
 
 		static	void			injectR(sol::state & luaSol);
+#ifndef HBC_NO_LUA_IMGUI
+		static	void			injectImGui(sol::state & luaSol);
+#endif
+#ifndef HBC_NO_LUA_FMOD
+		static	void			injectFmod(sol::state & luaSol);
+#endif
+
+		void					callFunc(const char * name);
 
 		virtual void			update(double dt);
 		virtual void			eval();
 		virtual void			reeval();
 
-		void					im();
+		bool					im() override;
 	};
 }//end namespace rd

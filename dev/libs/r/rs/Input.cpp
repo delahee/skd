@@ -14,8 +14,7 @@ int rs::Input::flags = 0;
 
 static Pasta::Key keyboardMap(Pasta::Key k) {
 	if (ri18n::T::getLang() == "fr") {
-		switch( k )
-		{
+		switch (k) {
 		case KB_A: return KB_Q;
 		case KB_Q: return KB_A;
 
@@ -29,52 +28,49 @@ static Pasta::Key keyboardMap(Pasta::Key k) {
 	return k;
 }
 
-bool rs::Input::isKeyboardKeyDown(Pasta::Key kc){
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isKeyboardKeyDown(Pasta::Key kc) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return mgr->keyIsPressed(CT_KEYBOARD, keyboardMap(kc));
 }
 
-bool rs::Input::isKeyboardKeyUp(Pasta::Key  kc){
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isKeyboardKeyUp(Pasta::Key kc) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return !mgr->keyIsPressed(CT_KEYBOARD, keyboardMap(kc));
 }
 
-bool rs::Input::isKeyboardKeyJustPressed(Pasta::Key  kc){
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isKeyboardKeyJustPressed(Pasta::Key kc) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return mgr->keyHasJustBeenPressed(CT_KEYBOARD, keyboardMap(kc));
 }
 
-bool rs::Input::isKeyboardKeyJustReleased(Pasta::Key  kc){
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isKeyboardKeyJustReleased(Pasta::Key kc) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return mgr->keyHasJustBeenReleased(CT_KEYBOARD, keyboardMap(kc));
 }
 
-bool rs::Input::isKeyDown(Pasta::ControllerType ct, Pasta::Key kc)
-{
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isKeyDown(Pasta::ControllerType ct, Pasta::Key kc) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return mgr->keyIsPressed(ct, keyboardMap(kc));
 }
 
-bool rs::Input::isKeyUp(Pasta::ControllerType ct, Pasta::Key kc)
-{
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isKeyUp(Pasta::ControllerType ct, Pasta::Key kc) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return !mgr->keyIsPressed(ct, keyboardMap(kc));
 }
 
 
-bool rs::Input::isKeyJustPressed(Pasta::ControllerType ct, Pasta::Key kc){
+bool rs::Input::isKeyJustPressed(Pasta::ControllerType ct, Pasta::Key kc) {
 	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return mgr->keyHasJustBeenPressed(ct, keyboardMap(kc));
 }
 
-bool rs::Input::isKeyJustReleased(Pasta::ControllerType ct, Pasta::Key kc)
-{
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isKeyJustReleased(Pasta::ControllerType ct, Pasta::Key kc) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return mgr->keyHasJustBeenReleased(ct, keyboardMap(kc));
 }
 
 float rs::Input::getKeyValue(Pasta::ControllerType ct, Pasta::Key kc) {
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	return mgr->getKeyValue(ct, keyboardMap(kc));
 }
 
@@ -102,25 +98,25 @@ bool rs::Input::isDirJustPressed_Right() {
 	return false;
 }
 
-bool rs::Input::isDirPressed_Down(){
+bool rs::Input::isDirPressed_Down() {
 	if (isKeyDown(CT_KEYBOARD, KB_DOWN)) return true;
 	if (onAnyPadDown(PAD_DOWN)) return true;
 	return false;
 }
 
-bool rs::Input::isDirPressed_Up(){
+bool rs::Input::isDirPressed_Up() {
 	if (isKeyDown(CT_KEYBOARD, KB_UP)) return true;
 	if (onAnyPadDown(PAD_UP)) return true;
 	return false;
 }
 
-bool rs::Input::isDirPressed_Left(){
+bool rs::Input::isDirPressed_Left() {
 	if (isKeyDown(CT_KEYBOARD, KB_LEFT)) return true;
 	if (onAnyPadDown(PAD_LEFT)) return true;
 	return false;
 }
 
-bool rs::Input::isDirPressed_Right(){
+bool rs::Input::isDirPressed_Right() {
 	if (isKeyDown(CT_KEYBOARD, KB_RIGHT)) return true;
 	if (onAnyPadDown(PAD_RIGHT)) return true;
 	return false;
@@ -155,7 +151,7 @@ bool rs::Input::isDirReleased_Right()
 }
 
 bool rs::Input::onAnyPadDown(Pasta::Key k) {
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	for (unsigned int i = 0; i < CT_PAD_COUNT; i++)
 		if (rs::Input::isKeyDown((Pasta::ControllerType)i, keyboardMap(k)))
 			return true;
@@ -165,13 +161,13 @@ bool rs::Input::onAnyPadDown(Pasta::Key k) {
 bool rs::Input::isAnyPadJustPressed(Pasta::Key k) {
 	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	for (unsigned int i = 0; i < CT_PAD_COUNT; i++)
-		if ( rs::Input::isKeyJustPressed((Pasta::ControllerType)i, keyboardMap(k)))
+		if (rs::Input::isKeyJustPressed((Pasta::ControllerType)i, keyboardMap(k)))
 			return true;
 	return false;
 }
 
-bool rs::Input::isAnyPadJustReleased(Pasta::Key k){
-	InputMgr * mgr = Pasta::InputMgr::getSingleton();
+bool rs::Input::isAnyPadJustReleased(Pasta::Key k) {
+	InputMgr* mgr = Pasta::InputMgr::getSingleton();
 	for (unsigned int i = 0; i < CT_PAD_COUNT; i++)
 		if (isKeyJustPressed((Pasta::ControllerType)i, keyboardMap(k)))
 			return true;

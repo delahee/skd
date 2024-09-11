@@ -6,6 +6,7 @@ namespace r {
 	class Math {
 	public:
 		static constexpr float pi = 3.14159265359f;
+		static constexpr float sqrt2 = 1.41421356237f;
 		static constexpr float goldenRatio = 1.618033988749f;
 		static constexpr float invGoldenRatio = 1.0f / 1.618033988749f;
 
@@ -16,30 +17,39 @@ namespace r {
 			return x;
 		}
 
+		static inline float deg2Rad(float x) {
+			return x * (PASTA_PI / 180.f);
+		};
+
 		static inline float rad2Deg(float x) {
 			return x * (180.f / PASTA_PI);
 		};
 
-		static inline float deg2Rad(float x) {
-			return x * (PASTA_PI / 180.f);
+		static inline float pow2(float x) {
+			return x * x;
 		};
+
+		static inline int pow2(int x) {
+			return x * x;
+		};
+
+		static inline double pow2(double x) {
+			return x * x;
+		};
+
+		
 
 		static inline float normAngle(float x) {
 			x = fmodf(x, 2.0f * pi);
 			return x;
 		}
 
-		static inline float normAnglePos(float x) {
-			x = fmodf(x, 2.0f * pi);
-			if (x < 0)
-				x += 2.0f * pi;
-			return x;
-		}
+		static inline float normAnglePos(float x);
+		static float normAnglePosPiNegPi(float x);
 
 		static inline bool isZero(float a, float epsilon = 1e-6f){
 			return fabsf(a) <= epsilon;
 		};
-
 		
 		static inline bool approximatelyEqual(float a, float b, float epsilon = 1e-6f)
 		{
@@ -81,6 +91,10 @@ namespace r {
 			return a + ratio * (b - a);
 		};
 
+		static inline Vector3 lerp(const Vector3 &a, const Vector3& b, double ratio) {
+			return a + ratio * (b - a);
+		};
+
 		static inline void swap(float& a, float& b) {
 			float tmp = a;
 			a = b;
@@ -107,6 +121,33 @@ namespace r {
 		};
 
 		static bool isFloat(float f, float thresh = 1e-6f);
+
+		static inline Vector3 compScale(const Vector3& a, const Vector3& b) {
+			return Vector3(a.x * b.x, a.y * b.y, a.z * b.z);
+		};
+		static inline Vector2 compScale(const Vector2& a, const Vector2& b) {
+			return Vector2(a.x * b.x, a.y * b.y);
+		};
+		static inline Vector4 compScale(const Vector4& a, const Vector4& b) {
+			return Vector4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
+		};
+		static inline Vector3 compDiv(const Vector3& a, const Vector3& b) {
+			return Vector3(a.x / b.x, a.y / b.y, a.z / b.z);
+		};
+		static inline Vector2 compDiv(const Vector2& a, const Vector2& b) {
+			return Vector2(a.x / b.x, a.y / b.y);
+		};
+		static inline Vector4 compDiv(const Vector4& a, const Vector4& b) {
+			return Vector4(a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w);
+		};
+		static inline bool isDenormalized(float x) {
+			return FP_SUBNORMAL == std::fpclassify(x);
+		};
+
+		static inline std::string to_string1(float x) {
+			Str30f v("%0.1f", x);
+			return v.c_str();
+		};
 	};
 
 	struct PASTA_EXPORT Vector2s {
@@ -203,7 +244,7 @@ namespace r {
 		r::s16 x = 0;
 		r::s16 y = 0;
 		r::s16 z = 0;
-		r::s16 _pad;
+		r::s16 _pad = 0;
 
 		Vector3s() {};
 		Vector3s(r::s16 x, r::s16 y, r::s16 z) {
@@ -299,9 +340,13 @@ namespace r {
 		inline const r::s16* ptr() const { return &x; };
 
 		float		getNorm() const { return sqrt(getNormSquared()); }
-		double		getNormSquared() const { return x * x + y * y + z * z; }
+		double		getNormSquared() const { return (float)x * x + y * y + z * z; }
 	};
 
 }
 
+//see rs::Std for to_string
+namespace std {
+	
+}
 

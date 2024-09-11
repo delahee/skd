@@ -1,27 +1,16 @@
 #include "stdafx.h"
 
-#include "1-graphics/geo_vectors.h"
-#include "1-graphics/Graphic.h"
-#include "1-texts/TextMgr.h"
-#include "1-graphics/Texture.h"
-#include "PastaAssert.h"
-
 #include "Text.hpp"
 
 #include "rd/Pools.hpp"
-
-#ifdef _DEBUG
 #include "ri18n/T.hpp"
-#endif
+#include "rd/Style.hpp"
 
 using namespace std;
 using namespace r2;
 using namespace Pasta;
 
-
-
-#define SUPER Batch
-Text::Text(rd::Font * _fnt, const char * text, r2::Node * parent ) : SUPER ( parent ){
+Text::Text(rd::Font * _fnt, const char * text, r2::Node * parent ) : Super ( parent ){
 	bgColor = r::Color(0, 0, 0, 0);
 	this->fnt = _fnt;
 	if (fnt == nullptr) fnt = r2::GpuObjects::defaultFont;
@@ -29,10 +18,8 @@ Text::Text(rd::Font * _fnt, const char * text, r2::Node * parent ) : SUPER ( par
 		this->shader = fnt->getShader();
 	setText(text);
 	this->setTextColor(r::Color(1.f, 1.f, 1.f));
-#ifdef _DEBUG
-	name = "Text#" + to_string(uid);
-#endif
 	blendmode = Pasta::TransparencyType::TT_ALPHA;
+	setName("Text");
 }
 
 r2::Text::Text(FontSetup fnt, const char* txt, r2::Node* parent) : r2::Text(fnt.font, txt, parent){
@@ -47,17 +34,18 @@ void r2::Text::centered(){
 	setBlockAlign(ALIGN_CENTER);
 }
 
-
 void r2::Text::reset() {
-	SUPER::reset();
-	colors.clear();
-	if (dropShadow)		delete dropShadow;		dropShadow = nullptr;
-	if (outline)		delete outline;			outline = nullptr;
 	clearContent();
+
+	Super::reset();
+	
+	colors.clear();
+	dropShadow = nullopt;
+	outline = nullopt;
 	italicBend = std::nullopt;
 	beforeDrawFlush = nullptr;
 	fnt = nullptr;
-	setText("");
+	text = "";//don't trigger caching
 	blockAlign = 0;
 	curPrio = 0;
 	bgColor = r::Color(0, 0, 0, 0);
@@ -68,15 +56,18 @@ void r2::Text::reset() {
 }
 
 void r2::Text::dispose() {
-	SUPER::dispose();
+	clearContent();
+
+	Batch::dispose();
 	colors.clear();
-	if (dropShadow)		delete dropShadow;		dropShadow = nullptr;
-	if (outline)		delete outline;			outline = nullptr;
+
+	dropShadow = nullopt;
+	outline = nullopt;
+
 	italicBend = std::nullopt;
 	beforeDrawFlush = nullptr;
-	clearContent();
 	fnt = nullptr;
-	setText("");
+	text = "";
 	blockAlign = 0;
 	curPrio = 0;
 	bgColor = r::Color(0, 0, 0, 0);
@@ -98,15 +89,25 @@ void r2::Text::setFont(rd::Font * fnt){
 	cache();
 }
 
-std::string & r2::Text::setText(const char * str){
+const char * r2::Text::setTranslationKey(const char* str) {
 	if (str == nullptr) {
-		text = "";
-		return text;
+		translationKey.clear();
+		return translationKey.c_str();
+	}
+	translationKey = str;
+	tryTranslate();
+	return translationKey.c_str();
+}
+
+const char* r2::Text::setText(const char * str){
+	if (str == nullptr) {
+		text.clear();
+		return text.c_str();
 	}
 
 	text = str;
 	cache();
-	return text;
+	return text.c_str();
 }
 
 void r2::Text::setBgColor(r::Color c){
@@ -192,18 +193,28 @@ void r2::Text::onBeforeDrawFlush() {
 
 	//ideally we should pump out a shear matric with an angle but come on.
 	int fSize = fnt->getSize();
-	for (int i = 0; i < nbElems; ++i) {
-		float* tl = &(fbuf.data()[ i * nbVertPerElem * stride + 0]);
-		float* tr = &(fbuf.data()[ i * nbVertPerElem * stride + stride * 1]);
-		float* bl = &(fbuf.data()[ i * nbVertPerElem * stride + stride * 2]);
-		float* br = &(fbuf.data()[ i * nbVertPerElem * stride + stride * 3]);
+	int bend = *italicBend;
+
+	float* fbufData = bufCache[bufCache.size() - 1].fbuf.data();
+	int nbFloat = bufCache[bufCache.size() - 1].fbuf.size();
+	int nbVertex = nbFloat / stride;
+	int nbQuad = nbVertex / nbVertPerElem;
+
+	for (int i = 0; i < nbQuad; ++i) {
+		//todo for non script typos ( ie that can go bellow baseline )
+		// if y is bellow baseline we shound bend in the right rd::Dir
+		int ofs = (i * nbVertPerElem * stride);
+		float* elemStart = fbufData + ofs;
+		float* tl = elemStart + 0;
+		float* tr = elemStart + stride;
+		float* bl = elemStart + stride * 2;
+		float* br = elemStart + stride * 3;
 		float& tlx = getX(bl);
 		float& trx = getX(br);
-		float bend = *italicBend;
 		float h = getY(tl) - getY(bl);
 		float coef = h / fSize;
-		getX(tl)+= bend * coef;
-		getX(tr) += bend * coef;
+		getX(tl)+= coef * bend;
+		getX(tr) += coef * bend;
 	}
 }
 
@@ -240,19 +251,39 @@ void r2::Text::applyAlign() {
 		el->y += yOffset;
 		el = el->next;
 	}
+	for(auto c : children){
+		if (!c->vars.has("r2::Text::inlined")) return;
+		auto lineIdx = c->vars.getInt("r2::Text::lineIndex");
+		auto& lineInfo = lineInfos[lineIdx];
+		xOffset = 0;
+		if ((blockAlign & ALIGN_HCENTER) == ALIGN_HCENTER)
+			xOffset -= lineInfo.width * 0.5f;
+		else if ((blockAlign & ALIGN_RIGHT) == ALIGN_RIGHT)
+			xOffset -= lineInfo.width;
+		if (snapToPixel)
+			xOffset = floor(xOffset);
+		c->x += xOffset;
+		c->y += yOffset;
+	}
 	
 }
 
-void r2::Text::setItalicBend(r::opt<int> point) {
+void r2::Text::tryTranslate() {
+	auto& t = translationKey;
+	if (ri18n::T::has(t))
+		setText(ri18n::T::get(t));
+}
+
+void r2::Text::setItalicBend(r::opt<int> point, bool doCache) {
 	italicBend = point;
-	if (point.has_value()) {
+	if (std::nullopt != point) {
 		beforeDrawFlush = [this]() {
 			onBeforeDrawFlush();
 		};
 	}
 	else
-		beforeDrawFlush = nullptr;
-	cache();
+		beforeDrawFlush = {};
+	if(doCache) cache();
 }
 
 int	r2::Text::getAnteCesurePoint(const char* text, float beforeW) {
@@ -342,7 +373,7 @@ void Text::pushChar(int charId, int nextCharId, int charPos, float *_x, float *_
 	char c = charId;
 	if (!fnt) 
 		return;
-	const CharDescr *ch = fnt->getCharDescr(charId);
+	const CharDescr *ch = rd::FontManager::get().getCharDescr(fnt,charId);
 	if (!ch) 
 		return;
 
@@ -359,10 +390,12 @@ void Text::pushChar(int charId, int nextCharId, int charPos, float *_x, float *_
 	if (!texture) 
 		return;
 	BatchElem * q = rd::Pools::elems.alloc();
-
+	auto tile = q->getTile();
 #if _DEBUG
 	//q->name = std::string({ (char)(charId),(char)0 });
 #endif
+	if (!tile)
+		return;
 
 	rd::Bits::unset(q->beFlags, NF_ENGINE_HELPER);
 	q->x = *_x + ox;
@@ -370,11 +403,11 @@ void Text::pushChar(int charId, int nextCharId, int charPos, float *_x, float *_
 	
 	float tw = texture->getWidth();
 	float th = texture->getHeight();
-	q->getTile()->setTexture(texture, u1/tw, v1/th, u2/tw, v2/th);
+	tile->setTexture(texture, u1/tw, v1/th, u2/tw, v2/th);
 	q->setSize(w, h);
 	q->z = 0.0;
 	q->setPriority( - curPrio + (page<<16) );//group rendering by pages but keep order
-	q->userdata = (void*)(charId);
+	q->vars.set( "codepoint", charId);
 	if (retainElementInfos) {
 		auto& ei = elInfos[q->uid];
 		ei.charcode = charId;
@@ -403,7 +436,7 @@ void Text::pushChar(int charId, int nextCharId, int charPos, float *_x, float *_
 		q->color = *forceColor;
 	}
 
-	if (dropShadow != nullptr) {
+	if (dropShadow) {
 		BatchElem * qShadow = rd::Pools::elems.alloc();
 		qShadow->beFlags |= NF_ENGINE_HELPER;
 		qShadow->x = q->x + dropShadow->dx;
@@ -417,7 +450,7 @@ void Text::pushChar(int charId, int nextCharId, int charPos, float *_x, float *_
 		qShadow->setPriority(q->getPriority() + 20);
 
 		qShadow->color = dropShadow->col; // Alpha inside color
-		qShadow->userdata = q;
+		qShadow->vars.set( "refElem", q);
 
 		if (retainElementInfos) {
 			auto& ei = elInfos[qShadow->uid];
@@ -428,7 +461,7 @@ void Text::pushChar(int charId, int nextCharId, int charPos, float *_x, float *_
 
 		add(qShadow);
 	}
-	if (outline != nullptr) {
+	if (outline != nullopt) {
 		for (int i = 0; i < 4; i++) {
 			BatchElem * qShadow = rd::Pools::elems.alloc();
 			qShadow->beFlags |= NF_ENGINE_HELPER;
@@ -448,8 +481,8 @@ void Text::pushChar(int charId, int nextCharId, int charPos, float *_x, float *_
 			qShadow->z = q->z;
 			qShadow->setPriority(q->getPriority() + 10);
 
-			qShadow->color = outline->col; // Alpha inside color
-			qShadow->userdata = q;
+			qShadow->color = outline->col.mulAlpha(colors.empty() ? 1 : colors.back().col.a);
+			qShadow->vars.set( "refElem", q );
 			if (retainElementInfos) {
 				auto& ei = elInfos[qShadow->uid];
 				ei.charcode = charId;
@@ -473,7 +506,13 @@ void r2::Text::clearContent() {
 	destroyAllElements();
 	elInfos.clear();
 	lineInfos.clear();
-	italicBend = std::nullopt;
+	if (children.size()) {
+		eastl::vector<r2::Node*> chs = children;
+		const char inlined[] = "r2::Text::inlined";
+		for (auto c : chs) 
+			if (c->vars.has(inlined)) 
+				c->destroy();
+	}
 }
 
 void Text::cache() {
@@ -488,9 +527,9 @@ void Text::cache() {
 	curLogicalCharacter = 0;
 	curLogicalLine = 0;
 	const char *str = text.c_str();
-	while (str && *str != 0) {
+	while (str && *str != 0) 
 		str = pushLine(str, &x, &y);
-	}
+	
 	setLineInfos(curLogicalLine, { x, y+getLineHeight() });
 
 	curLogicalCharacter = 0;
@@ -503,7 +542,7 @@ void Text::cache() {
 }
 
 void Text::addBg(){
-	if (text.size() && bgColor.a > 0.f) {
+	if (text.length() && bgColor.a > 0.f) {
 		r2::Bounds b;
 		r2::Bounds tmp;
 		auto el = head;
@@ -514,7 +553,7 @@ void Text::addBg(){
 			el = el->next;
 		}
 
-		BatchElem* le = firstElem();
+		BatchElem* le = getFirstElement();
 		BatchElem* e = rd::Pools::elems.alloc();
 		e->x = -bgExtent.x + b.left();
 		e->y = -bgExtent.y + b.top();
@@ -575,6 +614,7 @@ r::Vector2 r2::Text::getTextExtent(rd::Font* fnt, int fontSize, const char* txt)
 	t->setFontSize(fontSize);
 	t->setText(txt);
 	auto sz = t->getSize();
+	t->destroy();
 	return sz;
 }
 
@@ -583,15 +623,19 @@ r::Vector2 r2::Text::getTextSimulatedSize(rd::Font* fnt, int fontSize, const cha
 	t->setFont(fnt);
 	t->setFontSize(fontSize);
 	t->setText(txt);
-	return r::Vector2(t->width(), t->height());
+	auto sz = r::Vector2(t->width(), t->height());
+	t->destroy();
+	return sz;
 }
 
-const char * r2::Text::getLineWidth(const char *text, float *w, int count /*= -1*/)
-{
+const char * r2::Text::getLineWidth(const char *text, float *w, int count /*= -1*/){
+
 	if (fnt == nullptr) {
 		*w = 0.f;
 		return text;
 	}
+
+	auto& fntMan = rd::FontManager::get();
 	float _x = 0;
 	float _y = 0;
 	if (count == -1) count = 1024 * 1024;
@@ -604,10 +648,10 @@ const char * r2::Text::getLineWidth(const char *text, float *w, int count /*= -1
 		int nextPos;
 		int charId, nextCharId;
 		getTextChar(text, 0, &nextPos, &charId, &nextCharId);
-		const CharDescr *ch = fnt->getCharDescr(charId);
+		const CharDescr *ch = fntMan.getCharDescr(fnt,charId);
 
 #ifdef _DEBUG
-		if( charId != '?' && ch == fnt->getCharDescr('?')){
+		if( charId != '?' && ch == fntMan.getCharDescr(fnt,'?')){
 			if(ri18n::T::onUnknownFontCharacterEncountered)
 				ri18n::T::onUnknownFontCharacterEncountered(charId, fnt);
 		}
@@ -648,6 +692,12 @@ float Text::getLineHeight(){
 
 void r2::Text::setLineSpacingOffset(float f) { 
 	lineSpacingOffset = f; 
+	cache();
+}
+
+void r2::Text::clearMaxLineWidth() {
+	originalMaxLineWidth = -1;
+	maxLineWidth = -1;
 	cache();
 }
 
@@ -707,26 +757,44 @@ void r2::Text::replaceTextColor(r::Color c, int start, int end /*=-1*/) {
 
 // col manage the alpha
 void r2::Text::addDropShadow(float dx, float dy, r::Color col) {
-	if (!dropShadow) dropShadow = new r2::DropShadow();
-
+	if (!dropShadow) dropShadow = r2::DropShadow();
 	dropShadow->dx = dx;
 	dropShadow->dy = dy;
 	dropShadow->col = col;
 	cache();
 }
 
-// col manage the alpha
-void r2::Text::addOutline(r::Color col,float delta) {
-	if (outline) delete outline;
-	outline = new r2::Outline();
+void r2::Text::removeDropShadow() {
+	dropShadow = std::nullopt;
+	cache();
+}
+
+void r2::Text::removeOutline() {
+	outline = nullopt;
+	cache();
+}
+
+void r2::Text::addOutline(const r::Color &col,float delta) {
+	outline = r2::Outline();
 	outline->col = col;
 	outline->delta = delta;
 	cache();
 }
 
+void r2::Text::update(double dt) {
+	Super::update(dt);
+}
+
 void r2::Text::setBlockAlign(int align) {
 	blockAlign = align;
 	cache();
+}
+
+#include "ri18n/T.hpp"
+r2::Text* r2::Text::mk(rd::Font* fnt, const TKey& txt, r::Color color, Node* parent) {
+	auto t = r2::Text::fromPool(fnt, "", color, parent);
+	t->setTranslationKey(txt.c_str());
+	return t;
 }
 
 r2::Text* r2::Text::fromPool(rd::Font* fnt, const char* txt, r::Color color,  r2::Node* parent ) {
@@ -741,7 +809,7 @@ r2::Text* r2::Text::fromPool(rd::Font* fnt, const char* txt, r::Color color,  r2
 
 r2::Node* r2::Text::clone(r2::Node* n) {
 	if(!n) n = new r2::Text();
-	SUPER::clone(n);
+	Super::clone(n);
 
 	Text * s = dynamic_cast<Text*>(n);
 	if (s) {//we may sometime want to transfer only parent!
@@ -752,9 +820,9 @@ r2::Node* r2::Text::clone(r2::Node* n) {
 		s->text = text;
 		s->curPrio = curPrio;
 		if(s->dropShadow)
-			s->dropShadow = new DropShadow(*dropShadow);
+			s->dropShadow = DropShadow(*dropShadow);
 		if (s->outline)
-			s->outline = new Outline(*outline);
+			s->outline = Outline(*outline);
 		s->colors = colors;
 		s->curLogicalCharacter = 0;
 		s->curLogicalLine = 0;
@@ -780,7 +848,6 @@ void r2::Text::setFontSize(std::optional<float> newHeight) {
 		maxLineWidth = originalMaxLineWidth / scaleX;
 	}
 	cache();
-	
 }
 
 void r2::Text::setBgExtent(const r::Vector4& ex) {
@@ -818,5 +885,13 @@ void r2::Text::autosize(double maxWidth, int targetFontSize, int minFontSize){
 	}
 }
 
-#undef SUPER
+void r2::Text::clearAutosize(){
+	autoSizeTarget = nullopt;
+	autoSizeMin = nullopt;
+	autoSizeActual = nullopt;
+	autoSizeWidth = nullopt;
+}
 
+void r2::Text::applyStyle(const rd::Style& st) {
+	st.apply(*this);
+}

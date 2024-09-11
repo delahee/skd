@@ -20,7 +20,12 @@ namespace rd{
 	};
 
 	struct TPConf{
-		bool treatFoldersAsPrefixes = false;
+		enum FolderProcessing {
+			FP_AS_OPT_PREFIX,
+			FP_CRUSH,
+			FP_KEEP_AND_ALIAS,
+		};
+		FolderProcessing folderPolicy = FP_KEEP_AND_ALIAS;
 		r2::TexFilter filter = r2::TexFilter::TF_NEAREST;
 		bool loadAllPages = true;
 		bool skipSubFrames = false;

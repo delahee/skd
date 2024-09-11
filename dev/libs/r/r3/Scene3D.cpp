@@ -2,6 +2,7 @@
 
 #include "Scene3D.hpp"
 
+using namespace rs;
 r3::Scene3D::Scene3D() : r2::Scene() {
 	persW = rs::Display::width();
 	persH = rs::Display::height();
@@ -20,7 +21,7 @@ void r3::Scene3D::stdMatrix(rs::GfxContext* ctx, int w, int h) {
 	persH = h * cameraScale.y;
 
 	viewMatrix = Matrix44::cameraLookAt(cameraPos, cameraLookAt, worldUp);
-	projMatrix = Matrix44::frustum(angleDeg, w, h, ctx->zMin, ctx->zMax);
+	projMatrix = Matrix44::frustum(angleDeg, w, h, zMin, zMax);
 
 	if (ctx) {
 		ctx->loadViewMatrix(viewMatrix);
@@ -44,10 +45,14 @@ void r3::Scene3D::stdMatrix(rs::GfxContext* ctx, int w, int h) {
 	}
 }
 
-void r3::Scene3D::update(double dt) {
-	viewMatrix = Matrix44::cameraLookAt(cameraPos, cameraLookAt, Vector3(0, -1, 0));
-	//viewMatrix.setScale(cameraScale);
+Matrix44 r3::Scene3D::getCanonicalViewMatrix() const{
+	return Matrix44::cameraLookAt(cameraPos, cameraLookAt, worldUp);
+}
 
+
+
+void r3::Scene3D::update(double dt) {
+	viewMatrix = Matrix44::cameraLookAt(cameraPos, cameraLookAt, worldUp);
 	al.update(dt);
 	for (UpdateOp& ro : preUpdateOps) ro(dt);
 	Node::update(dt);
@@ -71,7 +76,7 @@ InputEvent r3::Scene3D::transformEvent(InputEvent& ev) {
 #endif
 		
 
-	// Px & Py are the ray direction in camera space
+	// Px & Py are the ray rd::Dir in camera space
 	float Px = (2 * (screenX / persW) - 1) * tanf(PASTA_DEG2RAD(angleDeg / 2)) * imageAspectRatio;
 	float Py = (1 - 2 * (screenY / persH)) * tanf(PASTA_DEG2RAD(angleDeg / 2));
 

@@ -2,10 +2,11 @@
 
 //bloat for r2::graphics goes here
 #include "r/Color.hpp"
-#include "r2/Graphics.hpp"
+namespace r2 { class Graphics; }
 
 namespace r2 {
 	namespace ext {
+		void drawParallelepiped(r2::Graphics* gfx, const r::Vector2& p0, const r::Vector2& p1, float size, float angleRad = r::Math::pi * 0.5);
 		void drawLine(r2::Graphics* gfx, const r::Vector3& p0, const r::Vector3& p1, const r::Color& colorStart, const r::Color& colorEnd, float thicc = 1.0);
 
 		//similar to gradients but rather than gradienting linearly, uses pixel bands
@@ -20,5 +21,6 @@ namespace r2 {
 		void drawGradient(r2::Graphics* gfx, const r::Vector3& p0, const r::Vector3& p1, eastl::vector<eastl::pair<float,r::Color>> & colors, float thicc = 1.0);
 		void drawBoxGradient(r2::Graphics* gfx, const r::Vector3& p0, const r::Vector3& p1, eastl::vector<eastl::tuple<float,r::Color, r::Color>> & colors, float thicc = 1.0);
 		void drawDisc(r2::Graphics* gfx, const r::Vector3& p0, float radius, const r::Color& col, int nbSegments = 0);
+		void draw3DCircle(r2::Graphics* gfx, const r::Vector3& vtx, const r::Vector3& up, const r::Vector3& normal, float radius, const r::Color& col, int nbSegments, float thicc);
 	}
 }

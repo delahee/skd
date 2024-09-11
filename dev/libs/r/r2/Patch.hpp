@@ -1,7 +1,6 @@
 #pragma once
 #include "Sprite.hpp"
-#include "1-graphics/geo_vectors.h"
-#include "EASTL/vector.h"
+
 
 namespace rs { class GfxContext; }
 namespace Pasta { class Texture; }
@@ -16,7 +15,7 @@ namespace r2 {
 	class Patch : public r2::Sprite {
 
 	public:
-		Patch(r2::Node* parent = nullptr) : r2::Sprite(parent) {  };
+		Patch(r2::Node* parent = nullptr);;
 		virtual						~Patch() {};
 		virtual void				process(rs::GfxContext* g);
 		void						setTransparency(rs::GfxContext* _g);

@@ -201,7 +201,7 @@ bool r2::tools::GradientEditor::im() {
 
 			std::string content;
 			if (rs::File::read(fsPath, content)) 
-				jDeserializeFromString(*this, content);
+				jDeserializeFromString(*this, content.c_str());
 			
 			rebuild = true;
 			cout << "loaded" << endl;
@@ -235,6 +235,12 @@ bool r2::tools::GradientEditor::im() {
 void r2::tools::GradientEditor::toggle(r2::Node * n){
 	if (!me)
 		me = new GradientEditor(n);
+	else {
+		auto ge = me;
+		delete ge;
+		me = 0;
+	}
+
 }
 
 void r2::tools::GradientEditor::dumpCpp() {

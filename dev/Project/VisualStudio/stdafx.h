@@ -21,6 +21,8 @@
 #include <map>
 #include <algorithm>
 #include <iosfwd>
+#include <string>
+#include <array>
 
 #include "btBulletCollisionCommon.h"
 #include "btBulletDynamicsCommon.h"

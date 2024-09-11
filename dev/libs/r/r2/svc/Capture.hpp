@@ -1,7 +1,5 @@
 #pragma once 
 
-#include "1-graphics/Texture.h"
-#include "r2/Types.hpp"
 #include "r2/RenderDoubleBuffer.hpp"
 #include "r2/Tile.hpp"
 

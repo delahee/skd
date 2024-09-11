@@ -69,7 +69,7 @@ namespace r2 {
 			virtual	void				dispose() override;
 			virtual void				update(double dt) override;
 			void						kill();
-			void						im();
+			bool						im();
 
 			static eastl::vector<Part*>	ALL;
 

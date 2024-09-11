@@ -1,6 +1,5 @@
 #pragma once
 
-#include "1-graphics/FrameBuffer.h"
 #include "r2/Scene.hpp"
 
 namespace r2{
@@ -16,7 +15,8 @@ namespace r2{
 		double				targetRatioH = 0.0;
 		double				targetRatioW = 0.0;
 
-		bool				targetFiltered = false;
+        bool				targetFiltered = false;
+        bool				isSingleBuffer = true;
 
 							OffscreenScene(int wantedWidth, int wantedHeight, r2::TexFilter filter = r2::TexFilter::TF_NEAREST);
 		virtual				~OffscreenScene();

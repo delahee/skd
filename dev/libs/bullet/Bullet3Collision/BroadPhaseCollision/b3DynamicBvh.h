@@ -13,7 +13,7 @@ subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 ///b3DynamicBvh implementation by Nathanael Presson
-
+#pragma once
 #ifndef B3_DYNAMIC_BOUNDING_VOLUME_TREE_H
 #define B3_DYNAMIC_BOUNDING_VOLUME_TREE_H
 

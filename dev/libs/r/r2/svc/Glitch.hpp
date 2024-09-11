@@ -1,8 +1,7 @@
 #pragma once
 
-#include "1-graphics/Texture.h"
-#include "../RenderDoubleBuffer.hpp"
-#include "Capture.hpp"
+
+namespace r2 { namespace svc { class Capture; } }
 
 namespace r2 {
 	namespace svc {

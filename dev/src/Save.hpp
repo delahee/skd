@@ -1,7 +1,6 @@
 #pragma once
-#include <string>
+
 #include "rd/Promise.hpp"
-#include <vector>
 #include "rd/Vars.hpp"
 #include "rd/JSerialize.hpp"
 
@@ -12,14 +11,14 @@ class Progress;
 class Profile {
 public:
 
-	Profile();
+					Profile();
 	static Profile* me;
 	bool			dirty = false;
 
 	std::string		name;
 	rd::Vars		config;//store various xplat config stuff
 	Progress*		progress=0;//store progress
-	void			im();
+	bool			im();
 	void			serialize(Pasta::JReflect&jr,const char*_name = 0);
 
 };
@@ -58,12 +57,11 @@ public:
 
 	void							im();
 
-	static string					folder;
-	static string					filePrefix;
-	static string					fileExt;
-
-	static string					appDataDir;
-	static string					localDataDir;
+	static std::string				folder;
+	static std::string				filePrefix;
+	static std::string				fileExt;
+	static std::string				appDataDir;
+	static std::string				localDataDir;
 
 	static bool						imOpened;
 
@@ -90,10 +88,10 @@ public:
 	static std::function<void(Profile*)>	createInitialProfile;
 	static std::function<void(LocalPref*)>	createInitialPrefs;
 
-	vector<string>					profiles;
+	std::vector<std::string>				profiles;
 
 private:
-	string							lastResult;
+	std::string						lastResult;
 	LocalPref*						cachedPrefs = 0;
 	Profile*						openedProfile = 0;
 	Save();

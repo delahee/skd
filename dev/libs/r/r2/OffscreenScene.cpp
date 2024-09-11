@@ -9,11 +9,7 @@ using namespace Pasta;
 
 #define SUPER r2::Scene
 
-OffscreenScene::OffscreenScene(int w, int h, r2::TexFilter filter) {
-	wantedWidth = w;
-	wantedHeight = h;
-	
-	rd.filter = filter;
+OffscreenScene::OffscreenScene(int w, int h, r2::TexFilter filter) : wantedWidth(w), wantedHeight(h), rd(filter, isSingleBuffer) {
 	targetRatioW = 1.0;
 	targetRatioH = 1.0;
 
@@ -29,6 +25,7 @@ void OffscreenScene::render(Pasta::Graphic * g){
 	rs::GfxContext _g = rs::GfxContext(g);
 	GraphicContext * ctx = GraphicContext::GetCurrent();
 
+	rd.setSingleBufferMode(isSingleBuffer);
 	rd.update(wantedWidth, wantedHeight);
 
 	FrameBuffer * _fb = rd.getWorkingFB();
@@ -58,8 +55,7 @@ Pasta::Texture* r2::OffscreenScene::getDepthTexture() {
 	return fb->getDepthAttachment()->m_texture;
 }
 
-r2::Tile * r2::OffscreenScene::getTargetTile()
-{
+r2::Tile * r2::OffscreenScene::getTargetTile() {
 	return rd.getDrawingTile();
 }
 

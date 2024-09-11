@@ -21,11 +21,13 @@
 
 #include "Text.hpp"
 #include "Graphics.hpp"
+#include "VertexArray.hpp"
 #include "Flow.hpp"
 
 #include "Interact.hpp"
 #include "InputField.hpp"
 
+#include "StaticBox.hpp"
 #include "OffscreenScene.hpp"
 
 #include "Helper.hpp"
@@ -33,5 +35,9 @@
 
 #include "Video.hpp"
 
-#include "Im.hpp"
+#include "r2/Im.hpp"
+
+#include "im/TilePicker.hpp"
+//#include "r2/NodeAgent.hpp"
+
 

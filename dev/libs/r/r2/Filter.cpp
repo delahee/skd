@@ -53,7 +53,7 @@ r2::Tile* r2::Filter::captureHierarchy(rs::GfxContext * _g, r2::Node * n, int pa
 	Pasta::Graphic * g = _g->gfx;
 	Pasta::GraphicContext * ctx = Pasta::GraphicContext::GetCurrent();
 	if (forFlattening == nullptr)
-		forFlattening = new RenderDoubleBuffer(texFilter);
+		forFlattening = new RenderDoubleBuffer(texFilter, isSingleBuffer);
 
 	TRS basis = n->getTRS();
 	n->resetTRS();
@@ -83,7 +83,6 @@ r2::Tile* r2::Filter::captureHierarchy(rs::GfxContext * _g, r2::Node * n, int pa
 		}
 		else 
 			forFlattening->update(w, h);
-		
 	
 		Texture * t = forFlattening->getWorkingTexture();
 		FrameBuffer * fb = forFlattening->getWorkingFB();
@@ -120,7 +119,12 @@ r2::Tile* r2::Filter::captureHierarchy(rs::GfxContext * _g, r2::Node * n, int pa
 									debugUseClearColor ? debugClearColor : r::Color(0.0, 0, 0, 0.0),
 									_g->zMax);
 
+						auto prev = n->nodeFlags & NodeFlags::NF_SKIP_HIERACHICAL_ALPHA;
+						if (shouldForceAlpha()) 
+							n->nodeFlags |= NodeFlags::NF_SKIP_HIERACHICAL_ALPHA;
 						n->drawContent(_g);
+						if (shouldForceAlpha()) 
+							rd::Bits::set(n->nodeFlags, prev);
 
 						cdebugProj = _g->projMatrix;
 						cdebugModel = _g->modelMatrix;
@@ -147,91 +151,99 @@ r2::Tile* r2::Filter::captureHierarchy(rs::GfxContext * _g, r2::Node * n, int pa
 }
 
 
-Tile* Filter::filterTile(rs::GfxContext * __g, r2::Tile * src){
+Tile* Filter::filterTile(rs::GfxContext * __g, r2::Tile * src) {
 	PASTA_CPU_GPU_AUTO_MARKER("r2::Filter::filterTile");
 	rs::GfxContext & _g = *__g;
 	Pasta::GraphicContext * ctx = _g.getGpuContext();
 	Pasta::Graphic * g = _g.gfx;
 
 	if (forFiltering == nullptr)
-		forFiltering = new RenderDoubleBuffer(texFilter);
+		forFiltering = new RenderDoubleBuffer(texFilter, isSingleBuffer);
 
-	int w = ceil(src->width);
-	int h = ceil(src->height);
+    int srcWidth = src->width;
+    int srcHeight = src->height;
+
+    int dstWidth = srcWidth;
+    int dstHeight = srcHeight;
 
 	//could tile stabilizer here but it is generally ok because tile stabilize will probably be done at capture stage
 
-	forFiltering->filter = texFilter;
-	forFiltering->update(w, h);
+    forFiltering->filter = texFilter;
+    forFiltering->update(dstWidth, dstHeight);
 
-	Scene * sc = forFiltering->sc;
-	sc->removeAllChildren();
-	sc->resetTRS();
+    Texture* res = forFiltering->getWorkingTexture();
+    FrameBuffer* resFb = forFiltering->getWorkingFB();
+    Scene* sc = forFiltering->sc;
+    Bitmap* bmp = forFiltering->bmp;
 
-	Bitmap * bmp = forFiltering->bmp;
-	Tile * dest = forFiltering->getWorkingTile();
-	FrameBuffer * fb = forFiltering->getWorkingFB();
-	Pasta::Texture * t = forFiltering->getWorkingTexture();
-	
-	bmp->tile = src;
-	bmp->ownsTile = false;
+	res->setWrapModeUVW(PASTA_TEXTURE_CLAMP);
 
-	int lw = t->getLogicalWidth();
-	int lh = t->getLogicalHeight();
+    bmp->resetTRS();
+    bmp->tile->copy(*src);
+    sc->cameraPos.x = bmp->tile->dx;
+    sc->cameraPos.y = bmp->tile->dy;
 
-	int iTop = ceil(flatteningBounds.top());
-	int iLeft = ceil(flatteningBounds.left());
-	sc->addChild(bmp);
-	bmp->blendmode = Pasta::TT_ALPHA;
-	bmp->resetTRS();
+	//sc->removeAllChildren();
+	//sc->resetTRS();
+	//
+	//Tile * dest = forFiltering->getWorkingTile();
+	//
+	//
+	//int lw = t->getLogicalWidth();
+	//int lh = t->getLogicalHeight();
+	//
+	//int iTop = ceil(flatteningBounds.top());
+	//int iLeft = ceil(flatteningBounds.left());
+	//sc->addChild(bmp);
+	//bmp->blendmode = Pasta::TT_ALPHA;
 
-	bmp->x = -iLeft;
-	bmp->y = -iTop;
+	//bmp->x = -iLeft;
+	//bmp->y = -iTop;
 	
 	bmp->mkClassic();//restore the std shader, let the bmpOps do their magic
 
 	for (BmpOp & op : bmpOps)
 		op(*bmp);
 
-	_g.push();
-		
-				_g.defaultZ();
-				forFiltering->sc->stdMatrix(&_g, lw, lh);
+	bmp->drawTo(res, resFb, sc);
 
-					_g.pushScissor();
-					_g.setScissor(0, 0, lw, lh);
+	//_g.push();
+	//	
+	//			_g.defaultZ();
+	//			forFiltering->sc->stdMatrix(&_g, lw, lh);
+	//
+	//				_g.pushScissor();
+	//				_g.setScissor(0, 0, lw, lh);
+	//
+	//
+	//					if (debugUseClearColor)
+	//						sc->clearColor = debugClearColor;
+	//					else 
+	//						sc->clearColor = r::Color(0, 0.0, 0, 0.0);
+	//					sc->doClear = true;
+	//					sc->drawInto(&_g, sc, t, fb);
+	//
+	//					fdebugProj = _g.projMatrix;
+	//					fdebugModel = _g.modelMatrix;
+	//					fdebugView = _g.viewMatrix;
+	//
+	//				_g.popScissor();
+	//
+	//	
+	//_g.pop();
+	//
+	//sc->removeAllChildren();
 
-
-						if (debugUseClearColor)
-							sc->clearColor = debugClearColor;
-						else 
-							sc->clearColor = r::Color(0, 0.0, 0, 0.0);
-						sc->doClear = true;
-						sc->drawInto(&_g, sc, t, fb);
-
-						fdebugProj = _g.projMatrix;
-						fdebugModel = _g.modelMatrix;
-						fdebugView = _g.viewMatrix;
-
-					_g.popScissor();
-
-		
-	_g.pop();
-
-	sc->removeAllChildren();
-
-	bmp->tile = nullptr;
-
-	Tile * d = forFiltering->getWorkingTile();
-	d->resetTargetFlip();
-	d->setCenterDiscrete(src->dx, src->dy);
-	d->setPos(0, 0);
-	d->setSize(lw, lh);
-	d->textureFlipY();
-	
-	Tile* res = forFiltering->getDrawingTile();
-	res->getTexture()->setWrapModeUVW(PASTA_TEXTURE_CLAMP);
-	return res;
+    Tile * d = forFiltering->getWorkingTile();
+    d->resetTargetFlip();
+    d->setCenterDiscrete(src->dx, src->dy);
+    d->setPos(0, 0);
+    d->setSize(src->width, src->height);
+    d->textureFlipY();
+    //
+    //Tile* res = forFiltering->getDrawingTile();
+    //res->getTexture()->setWrapModeUVW(PASTA_TEXTURE_CLAMP);
+	return forFiltering->getDrawingTile();
 }
 
 void r2::Filter::pushBitmapOp(BmpOp op){
@@ -260,7 +272,10 @@ void r2::Filter::compute(rs::GfxContext* g, r2::Node* n) {
 	//PASTA_CPU_GPU_AUTO_MARKER("r2::Filter::compute");
 	curNode = n;
 
-	if(onComputeStart) onComputeStart();
+	if (forFlattening) forFlattening->setSingleBufferMode(isSingleBuffer);
+    if (forFiltering) forFiltering->setSingleBufferMode(isSingleBuffer);
+
+	if (onComputeStart) onComputeStart();
 
 	g->push();
 

@@ -13,7 +13,7 @@ subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 //Originally written by Erwin Coumans
-
+#pragma once
 #ifndef _BT_CONVEX_UTILITY_H
 #define _BT_CONVEX_UTILITY_H
 

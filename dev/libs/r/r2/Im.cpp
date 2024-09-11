@@ -1,18 +1,59 @@
 #include "stdafx.h"
 
-#include "Im.hpp"
-#include "r2/BatchElem.hpp"
 #include "1-graphics/Graphic.h"
+#include "1-files/Path.h"
+#include "rs/Checksum.hpp"
+
+#include "r2/BatchElem.hpp"
+#include "ri18n/Nar.hpp"
 #include "rd/AudioMan.hpp"
 #include "im/TilePicker.hpp"
-#include "rs/Checksum.hpp"
+#include "Im.hpp"
+
+#include "im/NodeExplorer.hpp"
+#include "im/BatchElemExplorer.hpp"
 
 using namespace std;
 using namespace r;
 using namespace r2;
+using namespace rd;
 
 eastl::vector<r2::Node *>		r2::Im::depletedNodes;
 eastl::vector<r2::BatchElem *>	r2::Im::depletedElems;
+
+bool r2::Im::INCLUDE_CAMERA_SCALE = true;
+#define SCALE(v) INCLUDE_CAMERA_SCALE ? v / sc->cameraScale.x : v
+
+void r2::Im::nodeButton(r2::Node* n,const char * prefix) {
+	using namespace ImGui;
+	if (!n) return;
+	if (prefix) 
+		ImGui::Text(prefix); 
+	if (Button(std::string(ICON_MD_EDIT) + n->name.cpp_str() + "#" + to_string(n->uid)))
+		r2::im::NodeExplorer::edit(n);
+	if (IsItemHovered())
+		r2::Im::bounds(n, nullptr, 3);
+}
+
+void r2::Im::beButton(r2::BatchElem* n, const char* prefix) {
+	using namespace ImGui;
+	if (!n) return;
+	if (prefix)
+		ImGui::Text(prefix);
+	if (Button(std::string(ICON_MD_EDIT) + n->name.cpp_str() + "#" + to_string(n->uid)))
+		r2::im::BatchElemExplorer::edit(n);
+	if (IsItemHovered())
+		r2::Im::bounds(n, 3);
+}
+
+
+void r2::Im::imNar(ri18n::AstNode* ast){
+	if (!ast)
+		return;
+	using namespace ri18n;
+	using namespace ImGui;
+	ast->im();
+}
 
 void r2::Im::keepAlive(r2::Node& n){
 	rs::Std::remove(r2::Im::depletedNodes, &n);
@@ -20,6 +61,22 @@ void r2::Im::keepAlive(r2::Node& n){
 
 void r2::Im::keepAlive(r2::BatchElem& be) {
 	rs::Std::remove(r2::Im::depletedElems, &be);
+}
+
+bool r2::Im::filePicker(const char* pre,Str& f){
+	using namespace ImGui;
+	string path = "";
+	vector<pair<string, string>> filters;
+	filters.push_back(pair("Any file format (*.*)", "*.*"));
+
+	if (Button(pre)) {
+		if (rs::Sys::filePickForOpen(filters, path)) {
+			Pasta::Path::NormalizePath(path);
+			f = path;
+			return true;
+		}
+	}
+	return false;
 }
 
 bool r2::Im::imTextureData(Pasta::TextureData* data){
@@ -99,9 +156,9 @@ bool r2::Im::metadata(rd::Anon*& meta) {
 	ImGui::Columns(3);
 
 	int width = ImGui::GetWindowWidth() - 120 - 10;
-	ImGui::SetColumnWidth(0, width * 0.5);
-	ImGui::SetColumnWidth(1, width * 0.5);
-	ImGui::SetColumnWidth(2, 120);
+	ImGui::SetColumnWidth(0, width * 0.33);
+	ImGui::SetColumnWidth(1, width * 0.33);
+	ImGui::SetColumnWidth(2, 150);
 	ImGui::Text("Name"); ImGui::NextColumn();
 	ImGui::Text("Value"); ImGui::NextColumn();
 	ImGui::Text("Type"); ImGui::NextColumn();
@@ -127,49 +184,51 @@ static const char* noname = "noname";
 
 rd::Anon* r2::Im::anonContextMenu(rd::Anon* old) {
 	rd::Anon* metadata = old;
+
+	auto ensure = [&metadata]() { if(!metadata) metadata = rd::Anon::fromPool(noname); };
 	if (ImGui::BeginPopupContextItem("Create Metadata", 0)) {
 		if (ImGui::Selectable("int")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure(); 
 			metadata->mkInt(0);
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("int64")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure();
 			metadata->mkInt64(0);
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("uint64")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure();
 			metadata->mkUInt64(0);
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("float")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure(); 
 			metadata->mkFloat(0);
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("string")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure();
 			metadata->mkString("string");
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("color")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure();
 			metadata->mkColor(r::Color());
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("vec2")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure();
 			metadata->mkVec2(r::Vector2());
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("vec3")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure();
 			metadata->mkVec3(r::Vector3());
 			ImGui::CloseCurrentPopup();
 		}
 		if (ImGui::Selectable("vec4")) {
-			if (!metadata) metadata = new rd::Anon(noname);
+			ensure();
 			metadata->mkVec4(r::Vector4());
 			ImGui::CloseCurrentPopup();
 		}
@@ -182,19 +241,21 @@ rd::Anon* r2::Im::anonContextMenu(rd::Anon* old) {
 
 r2::Text * r2::Im::text(const std::string & txt, r2::Node * parent){
 	r2::Text * t = rd::Pools::texts.alloc();
-	t->nodeFlags |= NF_UTILITY;
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
 	if (parent)parent->addChild(t);
+
 	t->reset();
 	t->setFont(r2::GpuObjects::defaultFont);
-	t->setText(txt);
 	t->setTextColor(r::Color::White);
+	t->setText(txt);
+
 	depletedNodes.push_back(t);
 	return t;
 }
 
 r2::Text* r2::Im::fadingText(const std::string& txt, r2::Node* parent, int fadingDurMs){
 	r2::Text* t = rd::Pools::texts.alloc();
-	t->nodeFlags |= NF_UTILITY;
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
 	if (parent)parent->addChild(t);
 	t->resetTRS();
 	t->setFont(r2::GpuObjects::defaultFont);
@@ -218,6 +279,7 @@ r2::Graphics* r2::Im::graphics(r2::Node* parent) {
 r2::Graphics* r2::Im::circle(const r::Vector2& pos, int radius, r2::Node* parent, float thicc,int segs) {
 	if (!parent) return nullptr;
 	r2::Graphics* t = rd::Pools::graphics.alloc();
+	t->setName("circle");
 	t->nodeFlags |= NF_UTILITY;
 	if (parent)parent->addChild(t);
 	t->setPosVec2(pos);
@@ -230,13 +292,14 @@ r2::Graphics *	r2::Im::cross(const r::Vector2 & pos, float radius, r2::Node* par
 	if (!parent) return nullptr;
 	Scene* sc = parent->getScene();
 	if (!sc) return nullptr;
-	return r2::Im::cross(pos, radius, 2.0f / sc->cameraScale.x, parent);
+	return r2::Im::cross(pos, radius, SCALE(2.0f), parent);
 }
 
 r2::Graphics* r2::Im::cross(const r::Vector2& pos, float radius, float thicc, r2::Node* parent) {
 	if (!parent) return nullptr;
 	r2::Graphics* t = rd::Pools::graphics.alloc();
-	t->nodeFlags |= NF_UTILITY;
+	t->setName("cross");
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
 	if (parent) parent->addChild(t);
 	t->resetTRS();
 	t->clear();
@@ -249,12 +312,13 @@ r2::Graphics *	r2::Im::lineRect(const r::Vector2 & tl, const r::Vector2 & size, 
 	if (!parent) return nullptr;
 	Scene* sc = parent->getScene();
 	if (!sc) return nullptr;
-	return r2::Im::lineRect(tl, size, 1.0f / sc->cameraScale.x, col, parent);
+	return r2::Im::lineRect(tl, size, SCALE(1.0f), col, parent);
 }
 
 r2::Graphics *	r2::Im::lineRect(const r::Vector2 & tl, const r::Vector2 & size, float thicc, r::Color col, r2::Node* parent) {
 	r2::Graphics * t = rd::Pools::graphics.alloc();
-	t->nodeFlags |= NF_UTILITY;
+	t->setName("lineRect");
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
 	if(parent)parent->addChild(t);
 	t->resetTRS();
 	t->clear();
@@ -267,7 +331,8 @@ r2::Graphics *	r2::Im::lineRect(const r::Vector2 & tl, const r::Vector2 & size, 
 
 r2::Graphics *	r2::Im::quad(const r::Vector2 & tl, const r::Vector2 & size, r::Color col, r2::Node* parent) {
 	r2::Graphics * t = rd::Pools::graphics.alloc();
-	t->nodeFlags |= NF_UTILITY;
+	t->setName("quad");
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
 	if (parent)parent->addChild(t);
 	t->resetTRS();
 	t->clear();
@@ -277,30 +342,65 @@ r2::Graphics *	r2::Im::quad(const r::Vector2 & tl, const r::Vector2 & size, r::C
 	return t;
 }
 
+r2::Graphics* r2::Im::arrow(const r::Vector2& from, const r::Vector2& to, r2::Node* parent) {
+	r2::Graphics* t = rd::Pools::graphics.alloc();
+	t->setName("arrow");
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
+	if (parent) {
+		parent->addChild(t);
+		Scene* sc = parent->getScene();
+		t->drawLine(from.x, from.y, to.x, to.y, SCALE(1.0f));
+	}
+	else
+		t->drawLine(from.x, from.y, to.x, to.y, 1.0f);
+	//to be tested properly
+	Vector2 dir = to - from;
+	dir.normalize();
+	Vector2 ante = to - dir * 10;
+	Vector2 right = ante + dir.getPerpendicular() * 10;
+	Vector2 left = ante - dir.getPerpendicular() * 10;
+	t->drawLine(from, to);
+	t->drawLine(to, right);
+	t->drawLine(to, left);
+	depletedNodes.push_back(t);
+	return t;
+}
+
 r2::Graphics * r2::Im::line(const r::Vector2 & from, const r::Vector2 & to, r2::Node* parent) {
 	r2::Graphics * t = rd::Pools::graphics.alloc();
-	t->nodeFlags |= NF_UTILITY;
-	parent->addChild(t);
-	Scene* sc = parent->getScene();
-	t->drawLine(from.x, from.y, to.x, to.y, 1.0f / sc->cameraScale.x);
+	t->setName("line");
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
+	if (parent) {
+		parent->addChild(t);
+		Scene* sc = parent->getScene();
+		t->drawLine(from.x, from.y, to.x, to.y, SCALE(1.0f));
+	}
+	else 
+		t->drawLine(from.x, from.y, to.x, to.y, 1.0f);
 	depletedNodes.push_back(t);
 	return t;
 }
 
 r2::Graphics* r2::Im::line(const r::Vector2& from, const r::Vector2& to, float thicc, r2::Node* parent){
 	r2::Graphics* t = rd::Pools::graphics.alloc();
-	t->nodeFlags |= NF_UTILITY;
-	parent->addChild(t);
-	Scene* sc = parent->getScene();
-	t->drawLine(from.x, from.y, to.x, to.y, thicc / sc->cameraScale.x);
+	t->setName("line");
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
+	if (parent) {
+		parent->addChild(t);
+		Scene* sc = parent->getScene();
+		t->drawLine(from.x, from.y, to.x, to.y, SCALE(thicc));
+	}
+	else 
+		t->drawLine(from.x, from.y, to.x, to.y, thicc);
 	depletedNodes.push_back(t);
 	return t;
 }
 
 r2::Graphics * r2::Im::outerRect(const Bounds & bnds, r::Color col, r2::Node * parent, float thickness) {
 	r2::Graphics * t = rd::Pools::graphics.alloc();
-	t->nodeFlags |= NF_UTILITY;
-	parent->addChild(t);
+	t->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
+	if (parent) 
+		parent->addChild(t);
 	t->setGeomColor(col);
 	t->drawHollowRect(bnds.left(), bnds.top(), bnds.right(), bnds.bottom(), thickness);
 	depletedNodes.push_back(t);
@@ -314,7 +414,7 @@ r2::Graphics* r2::Im::bounds(r2::BatchElem* spr, float thicc) {
 	if (!sc) return nullptr;
 	Bounds lbnd;
 	spr->getBounds(lbnd, sc);
-	return r2::Im::outerRect(lbnd, r::Color::makeFromHSV(fmodf(rs::Timer::now * 32.f, 360), 1, 1), sc, thicc / sc->cameraScale.x);
+	return r2::Im::outerRect(lbnd, r::Color::makeFromHSV(fmodf(rs::Timer::now * 32.f, 360), 1, 1), sc, SCALE(thicc));
 }
 
 r2::Graphics * r2::Im::bounds(r2::Node * spr, const r::Color * col, float thicc) {
@@ -333,12 +433,12 @@ r2::Graphics * r2::Im::bounds(r2::Node * spr, const r::Color * col, float thicc)
 		nc = r::Color::makeFromHSV(fmodf(rs::Timer::now*8.f, 360), 1, 1);
 	else 
 		nc = *col;
-	return r2::Im::outerRect(lbnd, nc, sc, thicc / sc->cameraScale.x);
+	return r2::Im::outerRect(lbnd, nc, sc, SCALE(thicc));
 }
 
 r2::Bitmap* r2::Im::bmp(rd::TileLib* lib, const char* group, r2::Node* parent) {
 	r2::Bitmap* bmp = rd::Pools::bitmaps.alloc();
-	bmp->nodeFlags |= NF_UTILITY;
+	bmp->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
 	if (parent) parent->addChild(bmp);
 	bmp->copyTile(r2::GpuObjects::whiteTile);
 	lib->getTile(group, 0, 0, 0, bmp->tile);
@@ -348,7 +448,7 @@ r2::Bitmap* r2::Im::bmp(rd::TileLib* lib, const char* group, r2::Node* parent) {
 
 r2::Bitmap* r2::Im::bmp(r2::Tile* tile, r2::Node* parent) {
 	r2::Bitmap* bmp = rd::Pools::bitmaps.alloc();
-	bmp->nodeFlags |= NF_UTILITY;
+	bmp->nodeFlags |= NF_UTILITY | NF_SKIP_ELEMENT_SERIALIZATION;
 	if(parent) parent->addChild(bmp);
 	if (!tile)
 		bmp->copyTile(r2::GpuObjects::whiteTile);
@@ -397,15 +497,90 @@ void r2::ImSprite::im()
 	Value("zOffsetTop", zOffsetTop);
 	Value("zOffsetBottom", zOffsetBottom);
 	Value("blendmode", blendmode);
-	Value("color.r", color.r);
-	Value("color.g", color.g);
-	Value("color.b", color.b);
-	Value("color.a", color.a);
+	color.im("color");
 	Value("parentMatrix", parentMatrix);
 	Value("viewMatrix", viewMatrix);
 	Value("depthRead", depthRead);
 	Value("depthWrite", depthWrite);
 	Value("killAlpha", killAlpha);
+}
+
+bool ImGui::EditAngle(const char* prefix, r::opt<float>& val, float dflt){
+	BeginGroup();
+	using namespace ImGui;
+	bool hasValue = val.has_value();
+	bool changed = false;
+	if (TreeNode(prefix)) {
+		if (Checkbox("hasValue", &hasValue)) {
+			if (hasValue)
+				val = dflt;
+			else
+				val = std::nullopt;
+			changed = true;
+		}
+		if (hasValue) {
+			float v = *val;
+			if (ImGui::SliderAngle("value", &v)) {
+				*val = v;
+				changed = true;
+			}
+		}
+		TreePop();
+	}
+	EndGroup();
+	return changed;
+}
+
+bool ImGui::Edit(const char * prefix, r::opt<float>& val, float deflt) {
+	BeginGroup();
+	using namespace ImGui;
+	bool hasValue = val.has_value();
+	bool changed = false;
+	if (TreeNode(prefix)) {
+		if (Checkbox("hasValue", &hasValue)) {
+			if (hasValue)
+				val = deflt;
+			else
+				val = std::nullopt;
+			changed = true;
+		}
+		if (hasValue) {
+			float v = *val;
+			if (DragFloat("value", &v)) {
+				*val = v;
+				changed = true;
+			}
+		}
+		TreePop();
+	}
+	EndGroup();
+	return changed;
+}
+
+bool ImGui::Edit(const char* label, r::opt<double>& val, double dflt){
+	BeginGroup();
+	using namespace ImGui;
+	bool hasValue = val.has_value();
+	bool changed = false;
+	if (TreeNode(label)) {
+		if (Checkbox("hasValue", &hasValue)) {
+			if (hasValue)
+				val = dflt;
+			else
+				val = std::nullopt;
+			changed = true;
+		}
+		if (hasValue) {
+			auto v = *val;
+			if (DragDouble("value", &v)) {
+				*val = v;
+				changed = true;
+			}
+		}
+		TreePop();
+	}
+	EndGroup();
+	return changed;
 }
 
 bool r2::Im::draw(rs::GfxContext * gfx, const ImSprite & spr)
@@ -440,8 +615,11 @@ bool r2::Im::draw(rs::GfxContext * gfx, const ImSprite & spr)
 		flags |= Pasta::Graphic::BasicShaderFlags::BSF_PREMUL_ALPHA;
 	if( spr.killAlpha )
 		flags |= Pasta::Graphic::BasicShaderFlags::BSF_KILL_ALPHA;
-	//todo add this support
+	
+	//TODO
+	//flags |= Pasta::Graphic::BasicShaderFlags::BSF_UNIFORM_COLOR;
 	//g->setColorRGBA((Pasta::Color)spr.color);
+
 	g->setShader(g->getBasicShader(flags));
 
 	Pasta::Matrix44 trs = Pasta::Matrix44::identity;
@@ -451,9 +629,9 @@ bool r2::Im::draw(rs::GfxContext * gfx, const ImSprite & spr)
 	trs = spr.parentMatrix * trs;
 
 	//snatch the good view matrix
-	gfx->loadViewMatrix(spr.viewMatrix);
+	//gfx->loadViewMatrix(spr.viewMatrix);
 	gfx->loadModelMatrix(trs);
-	gfx->loadProjMatrix(gfx->projMatrix);
+	//gfx->loadProjMatrix(gfx->projMatrix);
 
 	const int stride = 3 + 2;
 	float vertexData[4 * stride];//pos uv
@@ -529,7 +707,7 @@ void r2::Im::exitFrame(){
 	depletedNodes.clear();
 
 	for (r2::BatchElem* t : depletedElems)
-		rd::Pools::free(t);
+		rd::Pools::release(t);
 	depletedElems.clear();
 }
 
@@ -572,11 +750,13 @@ namespace ImGui {
 			ImGui::Error("No tile to display");
 			return;
 		}
+		
 		Pasta::ShadedTexture* st = rd::Pools::allocForFrame();
 		st->texture = tile->getTexture();
 		ImVec2 uv0(tile->u1, tile->v1);
 		ImVec2 uv1(tile->u2, tile->v2);
 		ImGui::Image((ImTextureID)st, size, uv0, uv1, tint.toVec4());
+
 	}
 
 	void Text(const std::string& label) {
@@ -610,7 +790,16 @@ namespace ImGui {
 		return InputTextMultiline(label, (char*)str.c_str(), str.capacity() + 1, size, flags, StdStrResizeCallback, &str);
 	};
 
+	bool InputTextMultiline(const char* label, Str& str, const ImVec2& size) {
+		ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
+		return InputTextMultiline(label, (char*)str.c_str(), str.capacity() + 1, size, flags, StrStrResizeCallback, &str);
+	};
+
 	bool Button(const std::string & label) {
+		return ImGui::Button(label.c_str());
+	};
+
+	bool Button(const Str & label) {
 		return ImGui::Button(label.c_str());
 	};
 
@@ -624,19 +813,23 @@ namespace ImGui {
 	};
 
 	bool DragDouble(const char* label, double* val, double vspeed, double vmin, double vmax, const char* format){
-		return DragScalarN(label, ImGuiDataType_::ImGuiDataType_Double, val, 1, vspeed, &vmin, &vmax, format);
+		return DragScalar(label, ImGuiDataType_::ImGuiDataType_Double, val, vspeed, &vmin, &vmax, format);
 	}
 	
 	bool DragDouble2(const char * label, double * val, double vspeed, double vmin, double vmax, const char* format){
 		return DragScalarN(label, ImGuiDataType_::ImGuiDataType_Double, val, 2, vspeed, &vmin, &vmax, format);
 	};
 
+	bool DragDouble3(const char* label, double* val, double vspeed, double vmin, double vmax, const char* format) {
+		return DragScalarN(label, ImGuiDataType_::ImGuiDataType_Double, val, 3, vspeed, &vmin, &vmax, format);
+	}
+
 	bool DragDouble4(const char * label, double * val, double vspeed, double vmin, double vmax, const char* format){
 		return DragScalarN(label, ImGuiDataType_::ImGuiDataType_Double, val, 4, vspeed, &vmin, &vmax, format);
 	}
 
 	bool SliderDouble(const char* label, double* v, double v_min, double v_max, const char* format, ImGuiSliderFlags fl) {
-		return SliderScalarN(label, ImGuiDataType_::ImGuiDataType_Double, v, 1, &v_min, &v_max, format, fl);
+		return SliderScalar(label, ImGuiDataType_::ImGuiDataType_Double, v, &v_min, &v_max, format, fl);
 	};
 
 	bool Selectable(const std::string& str,bool * selected ){
@@ -856,53 +1049,7 @@ bool r2::Im::draw(rs::GfxContext * gfx, const Pasta::Matrix44 & trs, r2::Tile * 
 	return true;
 }
 
-bool r2::Im::imLibName(std::string& lib)
-{
-	using namespace ImGui;
-	std::vector<const char*> allLibNames;
-	for (auto iter : r2::im::TilePicker::sources) 
-		allLibNames.push_back(iter->name.c_str());
-	sort(allLibNames.begin(), allLibNames.end(), [](const char * a0,const char * a1) {
-		return strcmp(a0, a1) < 0;
-	});
-
-	int idx = -1;
-	int i = 0;
-	for (auto& s : allLibNames) {
-		if (0 == strcmp(s, lib.c_str())) 
-			idx = i;
-		i++;
-	}
-	if (idx == -1) {
-		ImGui::Text("current value : > %s > but no such library loaded", lib.c_str());
-		if (Button("FIX by using first lib ?")) {
-			lib = allLibNames[0];
-		}
-		if (Button("FIX by loading ?")) {
-			static string err;
-			if(!(r2::im::TilePicker::getOrLoadLib(lib))) {
-				err = "Cannot load library...";
-			}
-			if (err.length()) {
-				if (ImGui::Begin("Alert")) {
-					ImGui::Text(err.c_str());
-					if (Button("OKAY")) {
-						err = "";
-					}
-				}
-				ImGui::End();
-			}
-		}
-	}
-	else
-		if (Combo("lib", &idx, allLibNames.data(), allLibNames.size())) {
-			lib = allLibNames[idx];
-			return true;
-		}
-	return false;
-}
-
-bool r2::Im::imTagsReadOnly(const std::string& tags){
+bool r2::Im::imTagsReadOnly(const char * tags) {
 	using namespace ImGui;
 	static string tmp;
 	std::vector<string> all = rd::String::split(tags, ',');
@@ -913,20 +1060,124 @@ bool r2::Im::imTagsReadOnly(const std::string& tags){
 		ImGui::Text(s.c_str());
 		SameLine();
 	}
-	if (!someDisplayed) {
+	if (!someDisplayed) 
 		ImGui::Text("No tags currently");
+	return false;
+}
+
+bool r2::Im::imTagsReadOnly(const std::string& tags){
+	return imTagsReadOnly(tags.c_str());
+}
+
+bool r2::Im::imTags(rd::Vars& v) {
+	std::string s = v.getString("_tags");
+	if (r2::Im::imTags(s)) {
+		v.set("_tags", s);
+		return true;
 	}
 	return false;
 }
 
+bool r2::Im::imDir4(rd::Dir& dir) {
+	using namespace ImGui;
+	Str d = " ";
+
+	if (dir == 0)
+		dir = UP;
+
+	if (dir == UP)
+		d = "^ up";
+	else if (dir == DOWN)
+		d = "v down";
+	else if (dir == LEFT)
+		d = "< left";
+	else if (dir == RIGHT)
+		d = "> right";
+	
+	if (Button(d)) {
+		dir = (rd::Dir)(dir << 1);
+		if (dir > RIGHT)
+			dir = UP;
+		return true;
+	}
+
+	return false;
+}
+
+bool r2::Im::imDir4orNone(rd::Dir& dir){
+	using namespace ImGui;
+	Str d = " no dir ";
+
+	if (dir == UP)
+		d = "^ up";
+	else if (dir == DOWN)
+		d = "v down";
+	else if (dir == LEFT)
+		d = "< left";
+	else if (dir == RIGHT)
+		d = "> right";
+
+	if (Button(d)) {
+		if (dir == NONE)
+			dir = UP;
+		else 
+			dir = (rd::Dir)(dir << 1);
+
+		if (dir > RIGHT)
+			dir = NONE;
+
+		return true;
+	}
+
+	return false;
+}
+
+//not tested enough
+bool r2::Im::imTags(Str& tags) {
+	using namespace ImGui;
+	ImGui::Text("tags:");
+	std::vector<string> all = rd::String::split(tags.c_str(), ',');
+	bool someDisplayed = false;
+	for (auto& s : all) {
+		if (s.length() == 0)continue;
+		someDisplayed = true;
+		SameLine();
+		if (SmallButton(s.c_str())) {
+			//remove
+			auto pos = std::find(all.cbegin(), all.cend(), s);
+			if (pos != all.cend()) {
+				all.erase(pos);
+				tags = rd::String::join(all, ",");
+			}
+			return true;
+		}
+	}
+	if (!someDisplayed)
+		ImGui::Text("No tags currently");
+	SameLine();
+	static Str s_tmp;
+	InputText("new tag", s_tmp);
+	if (Button(ICON_MD_ADD)) {
+		if (tags.length())
+			tags += (",");
+		tags += (s_tmp);
+		s_tmp = "";
+		return true;
+	}
+	return false;
+}
+
+
 bool r2::Im::imTags(string& tags) {
 	using namespace ImGui;
 	static string tmp;
+	ImGui::Text("tags:");
 	std::vector<string> all = rd::String::split(tags, ',');
 	bool someDisplayed = false;
 	for (auto& s : all) {
 		if (s.length() == 0)continue;
 		someDisplayed = true;
+		SameLine();
 		if (SmallButton(s.c_str())) {
 			//remove
 			auto pos = std::find(all.cbegin(), all.cend(), s);
@@ -951,66 +1202,59 @@ bool r2::Im::imTags(string& tags) {
 	return false;
 }
 
-bool r2::Im::imTileName(std::string& tile,const char * libName){
+bool r2::Im::imTags(const char* label, eastl::vector<Str>& all) {
 	using namespace ImGui;
-
-	PushID(&tile);
-	std::vector<const char*> allTileNames;
-	static bool onlyAnims = true;
-	static bool showPreview = true;
-	auto lib = r2::im::TilePicker::getLib(libName);
-	if (!lib)
-		return false;
-
-	static string filter;
-	Indent();
-	InputText("filter", filter);
-	Checkbox("show Only Anims", &onlyAnims);
-	Checkbox("show Preview", &showPreview);
-	if (showPreview) {
-		auto lib = r2::im::TilePicker::getLib(libName);
-		if (lib->isAnim(tile.c_str())) {
-			auto group = lib->getGroup(tile.c_str());
-			r2::Tile* t = lib->getTile(tile.c_str(), group->anim[0]);
-			if (t) {
-				ImGui::Image(t, ImVec2(t->width, t->height));
-				t->destroy();
-			}
-		}
-		else {
-			r2::Tile* t = lib->getTile(tile.c_str());
-			if (t) {
-				ImGui::Image(t, ImVec2(t->width, t->height));
-				t->destroy();
-			}
+	static Str tmp;
+	ImGui::Text(label);
+	bool someDisplayed = false;
+	for (auto& s : all) {
+		if (s.length() == 0)continue;
+		someDisplayed = true;
+		if (SmallButton(s.c_str())) {
+			//remove
+			auto pos = std::find(all.cbegin(), all.cend(), s);
+			if (pos != all.cend())
+				all.erase(pos);
+			return true;
 		}
 	}
-	Unindent();
-	for (auto& p : lib->groups) {
-		auto group = p.second;
-		if( onlyAnims && !group->anim.size())
-			continue;
-		if( filter.length() && !rd::String::containsI(group->id.c_str(),filter.c_str()))
-			continue;
-		allTileNames.push_back(group->id.c_str());
-	}
-	sort(allTileNames.begin(), allTileNames.end(), [](const char* a0, const char* a1) {
-		return strcmp(a0, a1) < 0;
-	});
-
-	int idx = -1;
-	int i = 0;
-	for (auto& s : allTileNames) {
-		if (0 == strcmp(s, tile.c_str()))
-			idx = i;
-		i++;
-	}
-	if (Combo("tile", &idx, allTileNames.data(), allTileNames.size())) {
-		tile = allTileNames[idx];
-		PopID();
+	if (!someDisplayed)
+		ImGui::Text("No tags currently");
+	InputText("new tag", tmp);
+	SameLine();
+	if (Button(ICON_MD_ADD)) {
+		all.push_back(tmp);
+		tmp = "";
 		return true;
 	}
-	PopID();
+	return false;
+}
+
+bool r2::Im::imTags(const char * label, std::vector<Str>& all) {
+	using namespace ImGui;
+	static string tmp;//hmm suspiciously harmful ?
+	ImGui::Text(label);
+	bool someDisplayed = false;
+	for (auto& s : all) {
+		if (s.length() == 0)continue;
+		someDisplayed = true;
+		if (SmallButton(s.c_str())) {
+			//remove
+			auto pos = std::find(all.cbegin(), all.cend(), s);
+			if (pos != all.cend()) 
+				all.erase(pos);
+			return true;
+		}
+	}
+	if (!someDisplayed) 
+		ImGui::Text("No tags currently");
+	InputText("new tag",tmp);
+	SameLine();
+	if (Button(ICON_MD_ADD)) {
+		all.push_back(tmp);
+		tmp = "";
+		return true;
+	}
 	return false;
 }
 
@@ -1031,6 +1275,10 @@ void ImGui::TextHint(const char* label, r::Color col, const char* tip) {
 		ImGui::SetTooltip(tip);
 }
 
+void ImGui::Hint(const char* tip){
+	TextHint(ICON_MD_INFO, r::Color(Pasta::Color::White), tip);
+}
+
 void ImGui::Warning(const char* tip) {
 	TextHint(ICON_MD_WARNING, r::Color(Pasta::Color::Orange), tip);
 }
@@ -1039,12 +1287,15 @@ void ImGui::Warning(const std::string& tip) {
 	Error(tip.c_str());
 }
 
-
 void ImGui::Error(const char* tip) {
 	TextHint(ICON_MD_WARNING, r::Color(Pasta::Color::Red), tip);
 }
 
 void ImGui::Error(const std::string & tip) {
+	Error(tip.c_str());
+}
+
+void ImGui::Error(const Str& tip) {
 	Error(tip.c_str());
 }
 
@@ -1073,7 +1324,115 @@ void ImGui::Value(const char* prefix, const r2::Bounds& obj){
 }
 
 void ImGui::Value(const char* prefix, const Vector2i& v){
+	ImGui::Text("%s\t:", prefix); SameLine();
 	ImGui::Text("x:%d y:%d", v.x,v.y);
+}
+
+void ImGui::Value(const char* prefix, const Vector3i& v){
+	ImGui::Text("%s\t:", prefix); SameLine();
+	ImGui::Text("x:%d y:%d z:%d", v.x, v.y,v.z);
+}
+
+void ImGui::Value(const char* prefix, const Vector4i& v) {
+	ImGui::Text("%s\t:", prefix); SameLine();
+	ImGui::Text("x:%d y:%d z:%d w:%d", v.x, v.y, v.z, v.w);
+}
+
+void ImGui::Value(const char* prefix, const std::vector<int>& v){
+	using namespace ImGui;
+	for (int i = 0; i < v.size(); ++i) {
+		PushID(i);
+		Text( std::to_string(v[i]));
+		SameLine();
+		PopID();
+	}
+}
+
+void ImGui::Value(const char* prefix, const std::vector<Str>& v) {
+	using namespace ImGui;
+	for (int i = 0; i < v.size(); ++i) {
+		PushID(i);
+		Text(v[i].c_str());
+		SameLine();
+		PopID();
+	}
+	NewLine();
+}
+
+void ImGui::Value(const char* prefix, const eastl::vector<int>& v) {
+	using namespace ImGui;
+	Text(prefix);
+	if( v.empty()){
+		SameLine();
+		Text(":empty");
+		return;
+	}
+	for (int i = 0; i < v.size(); ++i) {
+		Indent();
+		PushID(i);
+		Text(std::to_string(v[i]));
+		SameLine();
+		PopID();
+		Unindent();
+	}
+	NewLine();
+}
+
+void ImGui::Value(const char* prefix, const eastl::vector<double>& v) {
+	using namespace ImGui;
+	ImGui::Text(prefix);
+	for (int i = 0; i < v.size(); ++i) {
+		PushID(i);
+		ImGui::Text(Str16f("%.3lf", v[i]));
+		SameLine();
+		ImGui::Text(", ");
+		SameLine();
+		PopID();
+	}
+	NewLine();
+}
+
+void ImGui::Value(const char* prefix, const eastl::vector<float>& v) {
+	using namespace ImGui;
+	ImGui::Text(prefix);
+	for (int i = 0; i < v.size(); ++i) {
+		PushID(i);
+		ImGui::Text( Str16f("%.3f",v[i]));
+		SameLine();
+		ImGui::Text(", ");
+		SameLine();
+		PopID();
+	}
+	NewLine();
+}
+
+
+void ImGui::Value(const char* prefix, const eastl::vector<Str>& v) {
+	using namespace ImGui;
+	ImGui::Text(prefix);
+	for (int i = 0; i < v.size(); ++i) {
+		PushID(i);
+		Text(v[i].c_str());
+		SameLine();
+		Text(", ");
+		SameLine();
+		PopID();
+	}
+	NewLine();
+}
+
+void ImGui::Value(const char* prefix, const std::vector<std::string>& v) {
+	using namespace ImGui;
+	Text(prefix);
+	for (int i = 0; i < v.size(); ++i) {
+		PushID(i);
+		Text(v[i].c_str());
+		SameLine();
+		Text(", ");
+		SameLine();
+		PopID();
+	}
+	NewLine();
 }
 
 
@@ -1085,56 +1444,126 @@ bool ImGui::TreeNode(const Str& txt) {
 	return ImGui::TreeNode(txt.c_str());
 }
 
-
 static bool eventPickerOpened = false;
-std::optional<std::pair<std::string, std::string>> ImGui::AudioPicker(bool edit) {
+std::optional<rd::EventRef> ImGui::AudioPickerRef( bool edit) {
 	using namespace ImGui;
-	if (Button(edit ? ICON_MD_EDIT "Pick audio" : ICON_MD_ADD "Add audio")) {
-		ImGui::OpenPopup("Pick audio event");
+	//this seems very lenghty...
+	std::string name = ICON_MD_EDIT " Pick audio ref";
+	if (Button(name)) {
+		ImGui::OpenPopup(name.c_str());
 		eventPickerOpened = true;
 	}
 
 	if (eventPickerOpened) {
 		ImGui::SetNextWindowSize(ImVec2(500, 440), ImGuiCond_FirstUseEver);
-		if (BeginPopupModal("Pick audio event", &eventPickerOpened)) {
+		if (BeginPopupModal(name.c_str(), &eventPickerOpened)) {
 			AudioMan& sm = AudioMan::get();
 			if (!sm.banks.size())
-				Text("No banks loaded, open Audio Explorer ( F3 )");
+				ImGui::Text("No banks loaded, open Audio Explorer ( F3 )");
 			std::string resBnk;
 			std::string resEv;
+
 			bool found = false;
-			for (auto& bnk : sm.banks) {
-				if (strstr(bnk.first.c_str(), ".strings")) continue;
-				if (CollapsingHeader(bnk.first.c_str())) {
-					eastl::vector<string> events = sm.getEventList(bnk.first.c_str());
-					for (int ev = 0; ev < events.size(); ++ev) {
-						if (Selectable(events[ev].c_str(), false)) {
-							resBnk = bnk.first;
-							resEv = events[ev];
+			char path[256] = {};
+			char path2[256] = {};
+			FMOD_GUID guid = {};
+
+			for (auto& p : sm.banks) {
+				if (strstr(p.first.c_str(), ".strings")) {
+					Selectable(p.first.c_str());
+				}
+				else if (TreeNodeEx(p.first.c_str(), 0)) {
+					PushID(&p);
+					FMOD::Studio::Bank* bnk = p.second;
+					int cnt = 0;
+					bnk->getEventCount(&cnt);
+					vector<FMOD::Studio::EventDescription*> res;
+					res.resize(cnt);
+					bnk->getEventList(res.data(), cnt, &cnt);
+
+					int mpath = 0;
+					int mpath2 = 0;
+					// sort res by path
+					std::sort(res.begin(), res.end(), [&](FMOD::Studio::EventDescription* ev1, FMOD::Studio::EventDescription* ev2) {
+						ev1->getPath(path, 259, &mpath);
+						ev2->getPath(path2, 259, &mpath2);
+						return strcmp(path, path2) == -1;
+						});
+
+					std::vector<std::pair<std::string, bool>> hierarchy;
+					int lastOpen = -1;
+					for (int i = 0; i < cnt; ++i) {
+						FMOD::Studio::EventDescription* ed = res[i];
+						res[i]->getPath(path, 259, &mpath);
+						ed->getID(&guid);
+
+						std::string s(path);
+						size_t pos = 0;
+						int depth = 0;
+						std::string token;
+						bool fullyOpen = true;
+						while ((pos = s.find("/")) != std::string::npos) {
+							token = s.substr(0, pos);
+							if (hierarchy.size() <= depth) {
+								bool open = TreeNodeEx(token.c_str(), 0);
+								hierarchy.push_back({ token, open });
+								fullyOpen &= open;
+							}
+							else if (strcmp(hierarchy[depth].first.c_str(), token.c_str()) != 0) {
+								for (int i = depth; i < hierarchy.size(); i++) {
+									if (hierarchy[i].second) TreePop();
+								}
+								hierarchy.resize(depth);
+								bool open = TreeNodeEx(token.c_str(), 0);
+								hierarchy.push_back({ token, open });
+								fullyOpen &= open;
+							}
+							else if (!hierarchy[depth].second) {
+								fullyOpen &= hierarchy[depth].second;
+							}
+							s.erase(0, pos + 1);
+							depth++;
+							if (!fullyOpen) break;
+						}
+						if (!fullyOpen)
+							continue;
+
+						PushID(i);
+						if (ImGui::Selectable(path)) {
+							resBnk = p.first;
+							resEv = path;
 							found = true;
+							PopID();
 							break;
 						}
+
+						PopID();
 					}
+					for (int i = 0; i < hierarchy.size(); i++) {
+						if (hierarchy[i].second) TreePop();
+					}
+					PopID();
+					TreePop();
 				}
 			}
 			EndPopup();
 			if (found) {
 				eventPickerOpened = false;
-				return std::make_optional(std::make_pair(resBnk, resEv));
+				rd::EventRef er;
+
+				er.bank = resBnk;
+				er.path= resEv;
+				er.guid = guid;
+				return std::make_optional(er);
 			}
 		}
 	}
 	return std::nullopt;
 }
 
-bool r2::Im::imSFX(string& sfx)
-{
+std::optional<std::pair<std::string, std::string>> ImGui::AudioPicker(bool edit) {
 	using namespace ImGui;
-
-	if (sfx.length()) {
-		ImGui::Text(sfx.c_str()); SameLine();
-	}
-	if (Button(ICON_MD_ADD "Set audio")) {
+	if (Button(edit ? ICON_MD_EDIT " Pick audio" : ICON_MD_ADD " Add audio")) {
 		ImGui::OpenPopup("Pick audio event");
 		eventPickerOpened = true;
 	}
@@ -1147,30 +1576,100 @@ bool r2::Im::imSFX(string& sfx)
 				ImGui::Text("No banks loaded, open Audio Explorer ( F3 )");
 			std::string resBnk;
 			std::string resEv;
+
 			bool found = false;
-			for (auto& bnk : sm.banks) {
-				if (strstr(bnk.first.c_str(), ".strings")) continue;
-				if (CollapsingHeader(bnk.first.c_str())) {
-					eastl::vector<string> events = sm.getEventList(bnk.first.c_str());
-					for (int ev = 0; ev < events.size(); ++ev) {
-						if (Selectable(events[ev].c_str(), false)) {
-							resBnk = bnk.first;
-							resEv = events[ev];
+			char path[256] = {};
+			char path2[256] = {};
+
+			for (auto& p : sm.banks) {
+				if (strstr(p.first.c_str(), ".strings")) {
+					Selectable(p.first.c_str());
+				} else if (TreeNodeEx(p.first.c_str(), 0)) {
+					PushID(&p);
+					FMOD::Studio::Bank* bnk = p.second;
+					int cnt = 0;
+					bnk->getEventCount(&cnt);
+					vector<FMOD::Studio::EventDescription*> res;
+					res.resize(cnt);
+					bnk->getEventList(res.data(), cnt, &cnt);
+
+					int mpath = 0;
+					int mpath2 = 0;
+					// sort res by path
+					std::sort(res.begin(), res.end(), [&](FMOD::Studio::EventDescription* ev1, FMOD::Studio::EventDescription* ev2) {
+						ev1->getPath(path, 259, &mpath);
+						ev2->getPath(path2, 259, &mpath2);
+						return strcmp(path, path2) == -1;
+					});
+
+					std::vector<std::pair<std::string, bool>> hierarchy;
+					int lastOpen = -1;
+					for (int i = 0; i < cnt; ++i) {
+						FMOD::Studio::EventDescription* ed = res[i];
+						res[i]->getPath(path, 259, &mpath);
+
+						std::string s(path);
+						size_t pos = 0;
+						int depth = 0;
+						std::string token;
+						bool fullyOpen = true;
+						while ((pos = s.find("/")) != std::string::npos) {
+							token = s.substr(0, pos);
+							if (hierarchy.size() <= depth) {
+								bool open = TreeNodeEx(token.c_str(), 0);
+								hierarchy.push_back({ token, open });
+								fullyOpen &= open;
+							} else if (strcmp(hierarchy[depth].first.c_str(), token.c_str()) != 0) {
+								for (int i = depth; i < hierarchy.size(); i++) {
+									if (hierarchy[i].second) TreePop();
+								}
+								hierarchy.resize(depth);
+								bool open = TreeNodeEx(token.c_str(), 0);
+								hierarchy.push_back({ token, open });
+								fullyOpen &= open;
+							} else if (!hierarchy[depth].second) {
+								fullyOpen &= hierarchy[depth].second;
+							}
+							s.erase(0, pos + 1);
+							depth++;
+							if (!fullyOpen) break;
+						}
+						if (!fullyOpen)
+							continue;
+
+						PushID(i);
+						if (ImGui::Selectable(path)) {
+							resBnk = p.first;
+							resEv = path;
 							found = true;
+							PopID();
 							break;
 						}
+
+						PopID();
 					}
+					for (int i = 0; i < hierarchy.size(); i++) {
+						if (hierarchy[i].second) TreePop();
+					}
+					PopID();
+					TreePop();
 				}
 			}
-			ImGui::EndPopup();
+			EndPopup();
 			if (found) {
 				eventPickerOpened = false;
-				sfx = resEv;
-				return true;
+				/*
+				rd::EventRef er;
+				er.bank = resBnk;
+				er.path = resEv.c_str();
+				sm.getEvent(er.path.c_str())->getID(&er.guid);
+				*/
+				auto er = std::make_pair(resBnk, resEv);
+				return std::make_optional(er);
 			}
 		}
 	}
-	return false;
+	return std::nullopt;
 }
 
 
@@ -1261,4 +1760,43 @@ void r2::Im::previewPixels(int w, int h, const r::u8* data, int size){
 		trace( std::string("creating transient texture from data CRC32 : ") + to_string(crc));
 	}
 	ImGui::Image(r2::Tile::fromTexture(tt->tex), ImVec2(w,h));
+}
+
+void ImGui::Button(const char* label, r2::Node* n) {
+	using namespace ImGui;
+	ImGui::Text(label);
+	SameLine();
+	if (!n) {
+		ImGui::Text("None");
+		return;
+	}
+	if (Button(std::string(ICON_MD_EDIT) + n->name.cpp_str() + "#" + to_string(n->uid)))
+		r2::im::NodeExplorer::edit(n);
+	if (IsItemHovered())
+		r2::Im::bounds(n, nullptr, 3);
+};
+
+static char* qnames[3] = { "False","True","Undetermined" };
+
+bool ImGui::Combo(const char* name, qbool & b) {
+
+	if (BeginCombo(name, qnames[(int)b])) {
+		if (Selectable("False")) {
+			b = qbool::False;
+			EndCombo();
+			return true;
+		}
+		if (Selectable("True")) {
+			b = qbool::True;
+			EndCombo();
+			return true;
+		}
+		if (Selectable("Undetermined")) {
+			b = qbool::Undetermined;
+			EndCombo();
+			return true;
+		}
+		EndCombo();
+	}
+	return false;
 }

@@ -20,12 +20,16 @@ bool rs::Svc::has(rd::Agent* ag) {
 	return (pos != registry.end());
 }
 
-void rs::Svc::reg(std::function<void(void)> fun) {
-	registry.insert(pair(0, new AnonAgent(fun)));
+void rs::Svc::reg(const std::string& name, std::function<void(void)> fun) {
+	auto aa = new AnonAgent(fun);
+	aa->name = name;
+	registry.insert(pair(0, aa));
 }
 
-void rs::Svc::reg(std::function<void(double dt)> fun) {
-	registry.insert(pair(0, new AnonAgent(fun)));
+void rs::Svc::reg(const std::string& name, std::function<void(double dt)> fun) {
+	auto aa = new AnonAgent(fun);
+	aa->name = name;
+	registry.insert(pair(0, aa));
 }
 
 void rs::Svc::reg(Agent* ag, int prio){

@@ -13,7 +13,7 @@ subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 ///original version written by Erwin Coumans, October 2013
-
+#pragma once
 #ifndef BT_MATRIX_X_H
 #define BT_MATRIX_X_H
 

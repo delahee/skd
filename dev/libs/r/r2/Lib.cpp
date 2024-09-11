@@ -1,30 +1,20 @@
-#include "Lib.hpp"
-#include <algorithm>
-#include "1-files/FileMgr.h"
-#include "1-graphics/FrameBuffer.h"
-#include "1-graphics/GraphicContext.h"
-#include "1-graphics/GraphicDefines.h"
-#include "1-graphics/GraphicEnums.h"
-#include "1-graphics/Texture.h"
-#include "1-time/Profiler.h"
-#include "1-time/TimeMgr.h"
 #include "stdafx.h"
 
-#include "../rd/RscLib.hpp"
+#include "Lib.hpp"
+
+#include "rd/RscLib.hpp"
 #include "GpuObjects.hpp"
 
 #include "r2/Bitmap.hpp"
 #include "r2/Scene.hpp"
+#include "rs/GfxContext.hpp"
 
 #include "r2/Helper.hpp"
-#include <iosfwd>
-#include <iterator>
-#include <iostream>
-#ifdef PASTA_WIN
-#include <filesystem>
+
+#ifdef PASTA_OGL
+#include "1-graphics/OGLGraphicContext.h"
 #endif
-#include <fstream>
-#include <string>
+
 
 using namespace r2;
 using namespace rs;
@@ -62,7 +52,7 @@ Pasta::Texture* Lib::getTexture(const std::string& path, r2::TexFilter filter, b
 	Pasta::Texture* tex = ctx->CreateTexture(texData, pfl);
 
 	double now = rs::Timer::stamp();
-	RscLib::makeBitArray(path.c_str(),texData);
+	rd::RscLib::makeBitArray(path.c_str(),texData);
 	double then = rs::Timer::stamp();
 
 	if(!cacheTextureData)
@@ -307,7 +297,7 @@ Pasta::Texture* Lib::tex_Blur(Pasta::Texture* src, float dx, float dy, float off
 		b->setShaderParam(string("uKernel"), kernelx, kernelx_size);
 		b->setShaderParam(string("uSampleOffsetsXY"), offsetx, kernelx_size * 2);
 		b->drawTo(tmp, tmpFb);
-		delete b;
+		b->destroy();
 		b = nullptr;
 		free(kernelx);
 		kernelx = nullptr;
@@ -363,7 +353,7 @@ Pasta::Texture* Lib::tex_Blur(Pasta::Texture* src, float dx, float dy, float off
 		b->setShaderParam(string("uKernel"), kernely, kernely_size);
 		b->setShaderParam(string("uSampleOffsetsXY"), offsety, kernely_size * 2);
 		b->drawTo(res, resFb);
-		delete b;
+		b->destroy();
 		b = nullptr;
 		free(kernely);
 		free(offsety);
@@ -445,10 +435,10 @@ Pasta::Texture* r2::Lib::tex_Bloom(const BloomCtrl& ctrl)
 	ctx->DestroyFrameBuffer(highPassFb);
 	r2::Lib::destroyTexture(texBlur);
 	r2::Lib::destroyTexture(texHighPass);
-	delete bHighPass;
-	delete bSrc;
-	delete bBlur;
-	delete composite;
+	if(bHighPass) delete bHighPass;
+	if(bSrc) delete bSrc;
+	if(bBlur) delete bBlur;
+	if(composite) delete composite;
 
 	return res;
 }
@@ -475,7 +465,7 @@ void r2::Lib::tex_Copy(Pasta::Texture* dest, Pasta::Texture* src)
 
 	_g.popScissor();
 
-	delete b;
+	b->destroy();
 	delete s;
 }
 
@@ -586,6 +576,7 @@ static std::vector<std::string> mkVsDefs(Pasta::u32 flags)
 		res.push_back("HAS_FXAA");
 	if (hasDithering)
 		res.push_back("HAS_DITHERING");
+
 		
 	return res;
 }
@@ -606,7 +597,6 @@ static std::vector<std::string> mkFsDefs(Pasta::u32 flags)
 	if (flags & Graphic::BSF_TEXTURE_ALPHA_ONLY)
 		res.push_back("TEXTURE_ALPHA_ONLY");
 
-
 	bool hasBlur = flags & UberShaderFlags::USF_Gaussian_Blur;
 	bool hasBloomPass = flags & UberShaderFlags::USF_Bloom;
 	bool hasRGBOffset = flags & UberShaderFlags::USF_RGBOffset;
@@ -623,6 +613,7 @@ static std::vector<std::string> mkFsDefs(Pasta::u32 flags)
 	bool hasVignette = flags & UberShaderFlags::USF_Vignette;
 	bool hasBloomPyramid = flags & UberShaderFlags::USF_BloomPyramid;
 	bool hasColorAdd = flags & UberShaderFlags::USF_ColorAdd;
+	bool hasRenderRes = flags & UberShaderFlags::USF_RenderResolution;
 
 
 	if (hasBlur)
@@ -658,9 +649,36 @@ static std::vector<std::string> mkFsDefs(Pasta::u32 flags)
 		res.push_back("HAS_BLOOM_PYRAMID");
 	if (hasVignette)
 		res.push_back("HAS_VIGNETTE");
+	if (hasRenderRes)
+		res.push_back("HAS_RENDER_RES");
 
 	return res;
 }
+
+Pasta::GraphicContextSettings r2::Lib::getGraphicsSettings() {
+#ifdef PASTA_OGL
+	Pasta::OGLGraphicContext::setOpenGLVersion(4, 1); //Necessary for debugging with RenderDoc
+#endif
+	GraphicContextSettings settings;
+	settings.m_numRWBufferSlots[ShaderStage::Vertex] = 1;
+	settings.m_numRWBufferSlots[ShaderStage::Compute] = 1;
+	settings.m_numTextureSlots[ShaderStage::Compute] = 1;
+	return settings;
+}
+
+r::u64 r2::Lib::getTileHash(r2::Tile* t) {
+	r::u64 id = 0;
+	
+	id |= (r::u64)t->x;
+	id |= ((r::u64)t->y)<<16ull;
+	id |= ((r::u64)t->width)<<24ull;
+	id |= ((r::u64)t->height)<<8ull;
+
+	if (t->getTexture())
+		id ^= Checksum::CRC32(t->getTexture()->getPath());
+
+	return id;
+};
 
 void r2::Lib::loadShader(ShaderProgramDescription* desc, std::string path) {
 	ShaderProgramDescription& shaderProgDesc = *desc;
@@ -774,7 +792,8 @@ Pasta::ShaderProgram* r2::Lib::loadCustomShader(const char* pathVS, const char* 
 	return shader;
 }
 
-void r2::Lib::applyShaderValues(Pasta::Graphic* g, Pasta::ShaderProgram* shader, rd::Vars & shaderValues) {
+void r2::Lib::applyShaderValues(rs::GfxContext* gctx, Pasta::ShaderProgram* shader, rd::Vars & shaderValues) {
+	Pasta::Graphic* g = gctx->gfx;
 	{
 		Pasta::ShaderParam* p = shader->getParam("uTime");
 		float now = (float)rs::Timer::now;
@@ -831,6 +850,18 @@ void r2::Lib::applyShaderValues(Pasta::Graphic* g, Pasta::ShaderProgram* shader,
 			if (p) p->setValue(Pasta::Vector2(1.0f / t->getWidth(), 1.0f / t->getHeight()).ptr());
 		}
 	}
+
+	Pasta::ShaderParam* p = shader->getParam("uRenderRes");
+	if (p) {
+		Vector2 screenRes;
+		Pasta::FrameBuffer*b = gctx->curBuffer;
+		if (b)
+			screenRes = { (float)b->getWidth(), (float)b->getHeight() };
+		else
+			screenRes = rs::Display::getSize();
+		p->setValue(screenRes.ptr());
+	}
+
 }
 
 r::Color r2::Lib::intToColor24(int rgb)
@@ -938,7 +969,7 @@ void r2::Lib::imTex(const char* filter)
 }
 
 r::Vector2 r2::Lib::screenToGlobal(r2::Scene* sc, r::Vector2 pt){
-	
+	sc->stdMatrix(nullptr);
 	return sc->viewMatrix.inverse() * pt;
 }
 
@@ -1001,18 +1032,18 @@ void r2::GlitchControl::readFromShader(r2::Sprite* spr) {
 }
 
 void r2::GlitchControl::upload(r2::Sprite* spr) {
-	rd::Bits::toggle(spr->shaderFlags, USF_Glitch, true);
+	rd::Bits::toggle(spr->shaderFlags, USF_Glitch, enabled);
 	spr->updateShaderParam("uGlitchParams", glitchAmount.ptr(), 4);
 }
 
 void r2::ColorMatrixControl::pack() {
 	Matrix44 matSettings = Matrix44::identity;
-	if(mode == ColorMatrixMode::CMM_HSV) {
-		ColorLib::colorHSV(matSettings, hue, sat, val);
+	if(mode == ColorMatrixMode::HSV) {
+		rd::ColorLib::colorHSV(matSettings, hue, sat, val);
 		mat = (matSettings.transpose());
 	}
-	else if( mode == ColorMatrixMode::CMM_Colorize){
-		ColorLib::colorColorize(matSettings, tint, ratioNew, ratioOld);
+	else if( mode == ColorMatrixMode::Colorize){
+		rd::ColorLib::colorColorize(matSettings, tint, ratioNew, ratioOld);
 		mat = (matSettings.transpose());
 	}
 	else {
@@ -1020,8 +1051,19 @@ void r2::ColorMatrixControl::pack() {
 	}
 }
 
+void r2::ColorMatrixControl::setup(r2::Sprite* spr) {
+	spr->mkUber();
+	spr->shaderFlags |= UberShaderFlags::USF_ColorMatrix;
+}
+
 void r2::ColorMatrixControl::upload(r2::Sprite* spr) {
 	spr->updateShaderParam("uColorMatrix", mat.ptr(), 16);
+}
+
+void r2::ColorMatrixControl::sync(r2::Sprite* spr){
+	pack();
+	setup(spr);
+	upload(spr);
 }
 
 void r2::ColorMatrixControl::readFromShader(r2::Sprite* spr) {
@@ -1030,7 +1072,7 @@ void r2::ColorMatrixControl::readFromShader(r2::Sprite* spr) {
 		rd::Anon* param = spr->getShaderParam("uColorMatrix");
 		if (param) memcpy(m.ptr(), param->asFloatBuffer(), 16*4);
 		mat = m.transpose();
-		mode = ColorMatrixMode::CMM_Matrix;
+		mode = ColorMatrixMode::Matrix;
 	}
 }
 
@@ -1046,4 +1088,58 @@ std::string transparencytype_to_string(Pasta::TransparencyType tt) {
 	case Pasta::TT_ERASE: return "erase";
 	}
 	return "unknown";
+}
+
+void r2::VignetteControl::neutral() {
+	amount = r::Vector3(1, 1, 1);
+	color = r::Color(0, 0, 0, 1);
+}
+
+void r2::VignetteControl::cut() {
+	amount = r::Vector3(2, 0, 1);
+	color = r::Color(0, 0, 0, 1);
+}
+
+bool r2::VignetteControl::im(){
+	using namespace ImGui;
+	bool chg = false;
+	if (Button("neutral")) {
+		neutral();
+		chg = true;
+	}
+	SameLine();
+	if (Button("cut")) {
+		cut();
+		chg = true;
+	}
+	
+	chg |= ImGui::DragFloat("Intensity", &amount.x, 0.01f, 0, 3);
+	chg |= ImGui::DragFloat("Smoothness", &amount.y, 0.01f, 0, 5);
+	chg |= ImGui::DragFloat("Roundness", &amount.z, 0.01f, 6, 1);
+	chg |= ColorEdit3("color", color.ptr());
+	return chg;
+}
+
+void r2::VignetteControl::readFromShader(r2::Sprite* spr){
+	if (spr->shader == Shader::SH_Basic) return;
+
+	if (spr->hasShaderParam("uVignetteAmount")) {
+		auto amnt = spr->getShaderParam("uVignetteAmount")->asFloatBuffer();
+		if (amnt) amount = r::Vector3(amnt[0], amnt[1], amnt[2]);
+	}
+
+	if (spr->hasShaderParam("uVignetteColor")) {
+		auto col = spr->getShaderParam("uVignetteColor")->asFloatBuffer();
+		if (col) color.set(col[0], col[1], col[2]);
+	}
+}
+
+void r2::VignetteControl::upload(r2::Sprite* spr){
+	spr->updateShaderParam(("uVignetteAmount"), amount.ptr(), 3);
+	spr->updateShaderParam(("uVignetteColor"),	color.ptr(), 3);
+}
+
+void r2::VignetteControl::setup(r2::Sprite* spr){
+	spr->mkUber();
+	spr->shaderFlags |= UberShaderFlags::USF_Vignette | UberShaderFlags::USF_RenderResolution;
 }

@@ -22,6 +22,9 @@ function rproject(name,enginePath,libPath)
 		
 		filter {} -- reset filter states because premake is lua not python...
 		
+		defines { "R_USE_STACKWALKER" }
+		filter {} 
+		
 		if (usePrecompiledHeaders == nil) then
 			usePrecompiledHeaders = true
 		end
@@ -68,6 +71,12 @@ function rproject(name,enginePath,libPath)
 			libPath .. "/../h264"
 		}
 		
+		filter "platforms:x64"
+			includedirs {
+				libPath .. "/../stackwalker"
+			}
+		filter {}
+		
 		files {
 			"**.natvis"
 		}
@@ -75,8 +84,8 @@ function rproject(name,enginePath,libPath)
 		vpaths {
 			["Natvis"] = { "**.natvis" },
 		}
-		defines { "_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS" }
 		
+		defines { "_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS" }
 		defines { "BT_USE_SSE_IN_API","BT_USE_DOUBLE_PRECISION" }
 		
 		GameEngineFwk_defines(enginePath)
@@ -88,6 +97,12 @@ function rproject(name,enginePath,libPath)
 		links {
 			"GameEngineFwk",
 		}
+		
+		filter "platforms:x64"
+			links {
+				"stackwalker"
+			}
+		filter {}
 		
 		
 		

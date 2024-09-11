@@ -6,6 +6,8 @@
 #include "PixelScene.hpp"
 
 using namespace r2;
+using namespace rd;
+using namespace std;
 
 PixelScene::PixelScene(int w,int h) : Super(){
 	doClear = true;
@@ -22,7 +24,7 @@ PixelScene::PixelScene(int w,int h) : Super(){
 
 	neutral();
 	al.push_back(&tw);
-	name = string("DtScene#") + to_string(uid);
+	name = std::string("DtScene#") + to_string(uid);
 }
 
 void PixelScene::onResize(const Vector2& ns) {
@@ -73,7 +75,7 @@ void PixelScene::testSettings() {
 void PixelScene::neutral() {
 	uber.bloomIntensity = 0.0f;
 	uber.distortionAmount.w = 0.9f;
-	setValue((TVar)VCHROMA_SAMPLES, 3);
+	setValue((rs::TVar)VCHROMA_SAMPLES, 3);
 
 }
 
@@ -210,7 +212,7 @@ void PixelScene::render(Pasta::Graphic* g) {
 	}
 }
 
-Tween* PixelScene::lastTween() {
+rd::Tween* PixelScene::lastTween() {
 	if (tw.tList.empty())
 		return nullptr;
 	return tw.tList.back();
@@ -362,7 +364,7 @@ void PixelScene::dispose() {
 	Super::dispose();
 }
 
-InputEvent PixelScene::transformEvent(InputEvent& ev) {
+rs::InputEvent PixelScene::transformEvent(rs::InputEvent& ev) {
 	if(!pixelPerfect)
 		return Super::transformEvent(ev);
 	else {
@@ -372,7 +374,7 @@ InputEvent PixelScene::transformEvent(InputEvent& ev) {
 	}
 }
 
-void PixelScene::onEvent(InputEvent& ev) {
+void PixelScene::onEvent(rs::InputEvent& ev) {
 	Super::onEvent(ev);
 }
 

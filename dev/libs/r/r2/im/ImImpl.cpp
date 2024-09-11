@@ -1,13 +1,13 @@
 #include "stdafx.h"
+#include "4-menus/imgui_internal.h"
 #include "r2/filter/all.hpp"
 #include "r2/svc/all.hpp"
 #include "r2/Bitmap.hpp"
 
 #include "rd/ABitmap.hpp"
 #include "rd/Anon.hpp"
-
-
 #include "r2/Im.hpp"
+#include "r2/NodeAgent.hpp"
 #include "r2/im/BatchElemExplorer.hpp"
 #include "r2/im/NodeExplorer.hpp"
 #include "r2/im/TilePicker.hpp"
@@ -18,6 +18,7 @@
 
 using namespace std;
 using namespace r2;
+using namespace rd;
 using namespace r2::im;
 
 static double dtmin = -4096;
@@ -27,24 +28,21 @@ const char* r2::Im::blends[r::TransparencyType::TRANSPARENCY_TYPE_COUNT] = {
 	"Opaque", "Clip Alpha", "Alpha", "Add", "Screen", "Multiply", "Alpha Multiply", "Erase" };
 const char* r2::Im::filters[(u32)r2::FilterType::FT_COUNT] = { //FilterType
 	"None", 
-	"Base", 
-	"Copy", 
+	"Base",
+	"Layer", 
 	"Blur", 
 	"Glow", 
 	"Bloom",
 	"ColorMatrix",
-	 };
-const char* r2::Im::modeMatrix[(u32)r2::ColorMatrixMode::CMM_Count] = { "HSV", "Colorize", "Matrix" };
+	"Copy",
+};
+const char* r2::Im::modeMatrix[(int)r2::ColorMatrixMode::Count] = { "HSV", "Colorize", "Matrix" };
 const char* r2::Im::texFilters[r2::TexFilter::TF_Count] = { 
 	"Nearest neighbor", "Linear", "Anisotropic", "Inherit" };
 
 static float homogeneousMinF = -2;
 static float homogeneousMaxF = 2;
 
-static int		gfxShapes = 0;
-static Vector4	gfxSize;
-static Vector4	gfxP0;
-static r::Color gfxColor;
 
 void r2::Scene::im() {
 	using namespace ImGui;
@@ -63,7 +61,7 @@ void r2::Scene::im() {
 
 		ImGui::SameLine();
 		if (ImGui::Button("Load")) {
-			if (!jDeserialize(*this, r::Conf::EDITOR_PREFAB_FOLDER, name + ".meta.json"))
+			if (!jDeserialize(*this, r::Conf::EDITOR_PREFAB_FOLDER, name.cpp_str() + ".meta.json"))
 				std::cout << "scene load failed" << std::endl;
 		}
 
@@ -125,9 +123,19 @@ void r2::Scene::im() {
 		ImGui::PopItemWidth();
 	}
 
+#ifdef _DEBUG
+	Checkbox("DEBUG EVENT", &DEBUG_EVENT);
+	if (TreeNode("Event Targets")) {
+		for (auto& et : interacts) 
+			r2::Im::nodeButton(et);
+		TreePop();
+	}
+#endif
 	if (!rd::Bits::is(nodeFlags, NF_EDITOR_HIDE_METADATA)) {
 		vars.im();
 	}
+
+	Super::im();
 }
 
 
@@ -163,6 +171,18 @@ void r2::Node::im() {
 		ImGui::EndMenuBar();
 	}
 
+	if(agl) {
+		if (ImGui::TreeNodeEx(ICON_MD_HEALING " Components##header", ImGuiTreeNodeFlags_DefaultOpen)) {
+			agl->im();
+			NodeAgent* na = 0;
+			if (NodeAgentFactory::imCreate("+##compsHead", na)) 
+				addComponent(na);
+			ImGui::TreePop();
+			Separator();
+		}
+	}
+	
+
 	if (ImGui::CollapsingHeader(ICON_MD_ACCOUNT_TREE " Node", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::PushItemWidth(60); ImGui::Indent();
 		
@@ -172,9 +192,11 @@ void r2::Node::im() {
 		ImGui::SetNextItemWidth(200);
 		ImGui::InputText("name", name);
 		ImGui::SameLine();
-		ImGui::Text("uid: %lu", uid);
-
+		ImGui::Text("uid: %lu", uid); SameLine(); if (Button(ICON_FA_DICE)) uid = rs::Sys::getUID();
 		ImGui::Checkbox("visible", &visible);
+		SameLine();
+		if (Button(ICON_MD_DELETE)) 
+			rd::Garbage::trash(this);
 
 		ImGui::SetNextItemWidth(188);
 		ImGui::DragScalarN("pos", ImGuiDataType_Double, &x, 2, 1.f, nullptr, nullptr, "%0.2lf"); ImGui::SameLine();
@@ -190,6 +212,7 @@ void r2::Node::im() {
 		if (ImGui::Button(ICON_MD_UNDO)) rotation = 0.0;
 		ImGui::PopID();
 
+		ImGui::Value("size", Vector2(width(), height()));
 		ImGui::PushID("scale");
 		double smin = 0.0;
 		double smax = 1000;
@@ -217,6 +240,9 @@ void r2::Node::im() {
 			FLAG_CHECKBOX(nodeFlags, SkipDraw, NodeFlags::NF_SKIP_DRAW);
 			FLAG_CHECKBOX(nodeFlags, Culled, NodeFlags::NF_CULLED);
 			FLAG_CHECKBOX(nodeFlags, SkipSerialization, NodeFlags::NF_SKIP_SERIALIZATION);
+			FLAG_CHECKBOX(nodeFlags, SkipDestruction, NF_SKIP_DESTRUCTION); 
+			FLAG_CHECKBOX(nodeFlags, SkipMeasuresForBounds,NF_SKIP_MEASURES_FOR_BOUNDS);
+			FLAG_CHECKBOX(nodeFlags, AphaUnder0SkipsDraw, NF_ALPHA_UNDER_ZERO_SKIPS_DRAW);
 
 			Separator();
 			
@@ -236,6 +262,7 @@ void r2::Node::im() {
 
 		if (ImGui::TreeNode("Calcs.")) {
 			Scene* sc = getScene();
+			Value("abs mouse", Vector2(rs::Sys::mouseX, rs::Sys::mouseY));
 
 			{
 				r2::Bounds bnd = getMyLocalBounds();
@@ -324,6 +351,12 @@ void r2::Node::im() {
 			}
 			TreePop();
 		}
+		if (ImGui::TreeNode("Components##embeded")) {
+			NodeAgent* res = 0;
+			if (NodeAgentFactory::imCreate("+##compsEmbed", res))
+				addComponent(res);
+			TreePop();
+		}
 
 		if (openPickParent) {
 			if (ImGui::BeginPopupModal("Parent Picker", &openPickParent, 0)) {
@@ -334,10 +367,10 @@ void r2::Node::im() {
 				std::function<void(r2::Node* _n)> f = [this, &all](r2::Node* _n) {
 					all.push_back(_n);
 				};
-				sc->traverse(f);
+				if(sc) sc->traverse(f);
 
 				for (auto n : all)
-					if (ImGui::Selectable(n->name.c_str())) {
+					if (ImGui::Selectable(n->name.empty() ? "##" : n->name.c_str())) {
 						if(n == this )
 							continue;
 
@@ -384,6 +417,7 @@ void r2::Node::im() {
 			switch (item_current) {
 				case FilterType::FT_NONE:			break;
 				case FilterType::FT_BASE:			filter = new r2::Filter(); break;
+				case FilterType::FT_COPY:			filter = new r2::filter::Layer(); break;
 				case FilterType::FT_LAYER:			filter = new r2::filter::Layer(); break;
 				case FilterType::FT_BLUR:			filter = new r2::filter::Blur(); break;
 				case FilterType::FT_COLORMATRIX:	filter = new r2::filter::ColorMatrix(); break;
@@ -424,6 +458,8 @@ void r2::Filter::im() {
 	ImGui::Checkbox("Take scale into account", &includeScale);
 	ImGui::SetNextItemWidth(124);
 	ImGui::Combo("Texture filtering##filter", (int*)(&texFilter), r2::Im::texFilters, (int)r2::TexFilter::TF_Count);
+    if(ImGui::Checkbox("isSingleBuffer", &isSingleBuffer))
+		invalidate();
 	ImGui::SliderInt("Mode", (int*)&mode, (int)FilterMode::FM_Frozen, (int)FilterMode::FM_Dynamic, (mode == FilterMode::FM_Dynamic) ? "Dynamic" : "Static");
 
 	ImGui::SameLine(0, 10); ImGui::Checkbox("debugFilter", &debugFilter);
@@ -454,18 +490,15 @@ void r2::Filter::im() {
 	ImGui::PopID();
 }
 
-void r2::filter::Layer::im() {
-	r2::Filter::im();
-}
+
 
 void r2::filter::Blur::im() {
 	using namespace ImGui;
-	r2::filter::Layer::im();
+	Super::im();
 	ImGui::Separator();
 	ImGui::PushID(this);
 	if (enabled) {
 		bool changed = false;
-		changed |= ImGui::Checkbox("isSingleBuffer", &isSingleBuffer);
 		PushItemWidth(124);
 		if (changed|=ImGui::DragFloat2("size", size.ptr(), 0.25f, 0, 75, "%0.2f"))
 			updateSize();
@@ -504,7 +537,7 @@ void r2::Im::imElemEntry(const char* label, r2::BatchElem* be){
 		ImGui::Text("%s", label); SameLine();
 	}
 	ImGui::Text("#%lu", be->uid); SameLine();
-	if (be->name.size()) {
+	if (be->name.length()) {
 		ImGui::Text(be->name);
 		SameLine();
 	}
@@ -518,27 +551,29 @@ void r2::Im::imNodeListEntry(const char * label,Node* e) {
 	using namespace ImGui;
 
 	PushID(e);
-	if (label) {
-		ImGui::Text("%s", label); SameLine();
-	}
-	ImGui::Text("#%lu", e->uid); SameLine();
-	if (e->name.size()) {
-		ImGui::Text(e->name);
-		SameLine();
-	}
+	BeginGroup();
 	if (Button(ICON_MD_ZOOM_IN)) 
 		r2::im::NodeExplorer::edit(e);
+	SameLine();
+	if (label) 
+		ImGui::Text("%s", label); SameLine();
+	ImGui::Text("#%lu", e->uid); SameLine();
+	if (e->name.length()) 
+		ImGui::Text(e->name);
+	EndGroup();
 	PopID();
 }
 
 static std::unordered_map<r::uid, ColorMatrixControl> colorPrms;
 
 bool r2::Im::imColorMatrix(ColorMatrixControl& prms) {
-	auto c = ImGui::GetCurrentContext();
+	using namespace ImGui;
+    auto c = ImGui::GetCurrentContext();
+    bool changed = false;
 	ImGui::PushID("Color Matrix Settings");
 
 	ImGui::SetNextItemWidth(150);
-	ImGui::Combo("Mode", (int*)&prms.mode, r2::Im::modeMatrix, (int)ColorMatrixMode::CMM_Count);
+	changed |= ImGui::Combo("Mode", (int*)&prms.mode, r2::Im::modeMatrix, (int)ColorMatrixMode::Count);
 
 	ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoOptions;
 	flags |= ImGuiColorEditFlags_NoAlpha;
@@ -546,11 +581,10 @@ bool r2::Im::imColorMatrix(ColorMatrixControl& prms) {
 	flags |= ImGuiColorEditFlags_NoLabel;
 	flags |= ImGuiColorEditFlags_NoInputs;
 
-	bool changed = false;
 	Matrix44& mat = prms.mat;
 	Matrix44 matSettings = Matrix44(mat);
 	switch (prms.mode) {
-	case ColorMatrixMode::CMM_HSV:
+	case ColorMatrixMode::HSV:
 		ImGui::PushItemWidth(80);
 		changed |= ImGui::SliderFloat("hue", &prms.hue, 0.0, 360.0, "%0.2f"); ImGui::SameLine();
 		changed |= ImGui::SliderFloat("sat", &prms.sat, -2, 2.0, "%0.2f"); ImGui::SameLine();
@@ -558,21 +592,21 @@ bool r2::Im::imColorMatrix(ColorMatrixControl& prms) {
 		ImGui::PopItemWidth();
 
 		matSettings = Matrix44::identity;
-		ColorLib::colorHSV(matSettings, prms.hue, prms.sat, prms.val);
+		rd::ColorLib::colorHSV(matSettings, prms.hue, prms.sat, prms.val);
 		mat = (matSettings.transpose());
 		break;
-	case ColorMatrixMode::CMM_Colorize:
+	case ColorMatrixMode::Colorize:
 		ImGui::Text("Tint:");
 		ImGui::SetNextItemWidth(188);
-		changed |= ImGui::ColorPicker4("Tint", prms.tint.ptr(), flags, NULL);
+		//changed |= ImGui::ColorPicker4("Tint", prms.tint.ptr(), flags, NULL);
 		changed |= ImGui::DragFloat("Ratio New", &prms.ratioNew, 0.01f, 0, 2);
 		changed |= ImGui::DragFloat("Ratio Old", &prms.ratioOld, 0.01f, 0, 2);
-
+		changed |= ImGui::ColorEdit4("color", prms.tint.ptr());
 		matSettings = Matrix44::identity;
 		ColorLib::colorColorize(matSettings, prms.tint, prms.ratioNew, prms.ratioOld);
 		mat = (matSettings.transpose());
 		break;
-	case ColorMatrixMode::CMM_Matrix:
+	case ColorMatrixMode::Matrix:
 		ImGui::PushItemWidth(252);
 		Vector4 colorR = matSettings.getRow(0);
 		Vector4 colorG = matSettings.getRow(1);
@@ -622,7 +656,6 @@ bool r2::Im::imColorMatrix(ColorMatrixControl& prms) {
 	
 	if (ImGui::Button("Reset")) {
 		mat = (Matrix44::identity);
-
 		prms.hue = 0.0f;
 		prms.sat = 1.0f;
 		prms.val = 1.0f;
@@ -630,17 +663,37 @@ bool r2::Im::imColorMatrix(ColorMatrixControl& prms) {
 		prms.ratioOld = 0.2f;
 		changed = true;
 	}
+
+	SameLine();
+	if (ImGui::Button(ICON_FA_CLIPBOARD)) {
+		string cc;
+		if (prms.mode == ColorMatrixMode::HSV) {
+			cc += "r2::ColorMatrixControl ctrl;\n";
+			cc += "ctrl.mode = r2::ColorMatrixMode::HSV;\n";
+			cc += "ctrl.hue = "s + std::to_string( prms.hue ) + "f;\n";
+			cc += "ctrl.sat = "s + std::to_string(prms.sat)  + "f;\n";
+			cc += "ctrl.val = "s + std::to_string(prms.val)  +"f;\n";
+			cc += "ctrl.ratioNew = "s + std::to_string(prms.ratioNew) + "f;\n";
+			cc += "ctrl.ratioOld = "s + std::to_string(prms.ratioOld) + "f;\n";
+			cc += "ctrl.tint = r::Color::fromUIntRGBA( 0x"s + prms.tint.toHexString() + " );\n";
+			cc += "ctrl.sync({obj});\n";
+		}
+		ImGui::SetClipboardText(cc.c_str());
+	}
 	ImGui::PopID();
 	return changed;
 }
 
 bool r2::Im::imColorMatrix(r::uid id, Matrix44& mat) {
 	bool exists = false;
-	if( colorPrms.find(id) != colorPrms.end())
+	if (colorPrms.find(id) != colorPrms.end())
 		exists = true;
 	ColorMatrixControl& prms = colorPrms[id];
-	if (!exists)
+	if (!exists) {
+		// since we can't retrieve HSV param from matrix we default to Matrix mode for now
+		prms.mode = ColorMatrixMode::Matrix;
 		prms.mat = mat;
+	}	
 	bool changed = imColorMatrix(prms);
 	mat = prms.mat;
 	if (prms.fresh) {
@@ -696,7 +749,7 @@ void r2::filter::Glow::im() {
 }
 
 void r2::filter::Bloom::im() {
-	r2::filter::Layer::im();
+	Super::im();
 	ImGui::Separator();
 	ImGui::PushID(this);
 	ctrl.im();
@@ -782,15 +835,35 @@ void r2::Sprite::im(){
 						setShaderParam("uColorMatrix", res.ptr(), 4 * 4);
 				}
 
-				bool shaderGlitch = shaderFlags & USF_Glitch;
-				if (ImGui::Checkbox("Glitch", &shaderGlitch))
-					rd::Bits::toggle(shaderFlags, USF_Glitch, shaderGlitch);
+				{
+					bool shaderGlitch = shaderFlags & USF_Glitch;
+					if (ImGui::Checkbox("Glitch", &shaderGlitch))
+						rd::Bits::toggle(shaderFlags, USF_Glitch, shaderGlitch);
+					if (shaderGlitch) {
+						GlitchControl gctrl;
+						gctrl.readFromShader(this);
+						if (gctrl.im())
+							gctrl.upload(this);
+					}
+				}
 
-				if (shaderGlitch) {
-					GlitchControl gctrl;
-					gctrl.readFromShader(this);
-					if (gctrl.im())
-						gctrl.upload(this);
+				{
+					bool shaderVignette = shaderFlags & USF_Vignette;
+					if (ImGui::Checkbox("Vignette", &shaderVignette)) {
+						if (shaderVignette) {
+							VignetteControl gctrl;
+							gctrl.setup(this);
+							gctrl.upload(this);
+						}
+					}
+					if (shaderVignette) {
+						VignetteControl gctrl;
+						gctrl.readFromShader(this);
+						Indent();
+						if (gctrl.im()) 
+							gctrl.upload(this);
+						Unindent();
+					}
 				}
 
 				bool shaderRGBOffset = shaderFlags & USF_RGBOffset;
@@ -879,15 +952,14 @@ void r2::Sprite::im(){
 		}
 
 		if (ImGui::TreeNode("Shader values")) {
-			if (shaderValues.head)
-				r2::Im::metadata(shaderValues.head);
-			else {
+			if (!shaderValues.head){
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
 				ImGui::TextWrapped(ICON_MD_WARNING " No shader values");
 				ImGui::PopStyleColor();
 				if (Button("Create"))
-					shaderValues.head = new Anon();
+					shaderValues.head = rd::Anon::fromPool();
 			}
+			shaderValues.im();
 			ImGui::TreePop();
 		}
 		ImGui::Unindent();
@@ -895,6 +967,7 @@ void r2::Sprite::im(){
 }
 
 void r2::Bitmap::im() {
+	using namespace ImGui;
 	r2::Sprite::im();
 	if (!rd::Bits::is(nodeFlags, NF_EDITOR_HIDE_RENDERING) &&  ImGui::CollapsingHeader(ICON_MD_IMAGE " Bitmap")) {
 		ImGui::Indent(); ImGui::PushItemWidth(124);
@@ -915,10 +988,20 @@ void r2::Bitmap::im() {
 		}
 
 		if (tile && ImGui::TreeNode(ICON_MD_IMAGE " Tile")) {
-			if (tile) tile->im();
-
 			if (ImGui::Button("Pick tile"))
 				r2::im::TilePicker::forBitmap(this);
+
+			if (tile) tile->im(true,false);
+
+			Str p;
+			if (r2::Im::filePicker("Pick any file",p)) {
+				auto resPath = rd::String::skip(p.c_str(), "res/");
+				auto d = RscLib::getTextureData( resPath );
+				if (d) {
+					setTile(r2::Tile::fromTextureData(d),true);
+					vars.set("r2::bitmap::path", resPath);
+				}
+			}
 
 			ImGui::TreePop();
 		}
@@ -938,7 +1021,7 @@ void rd::ABitmap::im() {
 		
 			auto anm = player.getCurrentAnim();
 			if (anm) 
-				aBitmapLoop = anm->plays > 1;
+				aBitmapLoop = anm->plays == -1;
 
 			if (aBitmapLoop) {
 				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
@@ -950,7 +1033,7 @@ void rd::ABitmap::im() {
 
 			if (ImGui::Button(ICON_MD_LOOP)) {
 				aBitmapLoop = !aBitmapLoop;
-				if(anm) anm->plays = aBitmapLoop ? 666666666 : 1;
+				if (anm) anm->plays = aBitmapLoop ? -1 : 1;
 			}
 
 			ImGui::PopStyleColor(2);
@@ -965,7 +1048,7 @@ void rd::ABitmap::im() {
 						player.resume();
 					else
 						replay();
-					if(aBitmapLoop)
+					if (aBitmapLoop)
 						player.loop();
 					else if(anm) anm->plays = 1;
 				}
@@ -1003,11 +1086,17 @@ void rd::ABitmap::im() {
 			if (lib)
 				ImGui::Text((std::string("Library: ") + lib->name).c_str());
 
+			Value("group", groupName);
+
+			if(!groupName.empty()&&!anm){
+				ImGui::Warning("No anim named "s + groupName);
+			}
+
 			if (anm) {
 				if (anm->groupName.length())
-					ImGui::Text( StrRef("Tile Group: ") + anm->groupName);
-				else
-					ImGui::Text( (std::string("Tile Group: ") + anm->groupData->id).c_str() );
+					ImGui::Text( Str64f("Tile Group: %s", anm->groupName) );
+				else if(anm->groupData)
+					ImGui::Text( Str64f("Tile Group: %s", anm->groupData->id ));
 				double spMin = -1;
 				double spMax = 4;
 				ImGui::SetNextItemWidth(60);
@@ -1018,7 +1107,6 @@ void rd::ABitmap::im() {
 					TreePop();
 				}
 			}
-
 
 			if (ImGui::Checkbox("flip X", &flippedX)) {
 				replay();
@@ -1055,125 +1143,26 @@ void rd::ABitmap::im() {
 	}
 }
 
-void r2::Graphics::im() {
-	using namespace ImGui;
-	r2::Sprite::im();
-	if (ImGui::CollapsingHeader(ICON_MD_MULTILINE_CHART " Graphics")) {
+
+void r2::Scissor::im() {
+
+	if (ImGui::CollapsingHeader(ICON_FA_CUT " Scissors")) {
 		ImGui::Indent();
-		
-		if (TreeNode("Content")) {
-			auto& tr = getTriangles();
-			ColorPicker4("geomColor", geomColor.ptr());
-			ImGui::Text("Nb Triangles : %lu", tr.size());
-			TreePop();
+		ImGui::DragDouble("Width", &rect.width, 1, 0, 2000);
+		ImGui::DragDouble("Height", &rect.height, 1, 0, 2000);
+		ImGui::DragDouble("X", &rect.x, 1, 0, 2000);
+		ImGui::DragDouble("Y", &rect.y, 1, 0, 2000);
+		if (ImGui::Button("make Rect")) {
+			Pasta::Graphic* gfx = Pasta::Graphic::getMainGraphic();
+			rs::GfxContext g(gfx);
+			drawRec(&g);
 		}
-
-		if (ImGui::Button(ICON_MD_ADD_BOX " Add Shape")) {
-			saveState();
-
-			gfxShapes = 0;
-			gfxP0 = Vector4(0, 0, 0, 0);
-			gfxSize = Vector4(0, 0, 0, 0);
-			gfxColor = r::Color(1, 1, 1, 1);
-
-			ImGui::OpenPopup("gfxPopup");
-		}
-		
-		ImGui::SameLine();
-
-		if (ImGui::Button(ICON_MD_CLEAR " Clear")) {
-			clear();
-		}
-
-		if (ImGui::BeginPopup("gfxPopup")) { //TODO prevent closing when clicking outside
-			ImGui::Text("Add to Graphics");
-
 			
 
-			const char* items[] = { "Rectangle", "Circle", "Disc", "Triangle" };
-			bool changed = ImGui::Combo("Shape", (int*)(&gfxShapes), items, IM_ARRAYSIZE(items));
-			ImGui::ColorPicker4("Color", gfxColor.ptr() );
-			switch (gfxShapes)
-			{
-				case 0:
-					ImGui::DragFloat2("pos", gfxP0.ptr(), 0.25, -100, 1000, "%0.2f");
-					ImGui::DragFloat2("size", gfxSize.ptr(), 0.25, -100, 1000, "%0.2f");
-					break;
-				case 1:
-					ImGui::DragFloat2("pos", gfxP0.ptr(), 0.25, -100, 1000, "%0.2f");
-					ImGui::DragFloat("radius", gfxSize.ptr(), 0.25, -100, 1000, "%0.2f");
-					ImGui::DragFloat("thickness", gfxSize.ptr()+1, 0.25, -100, 1000, "%0.2f");
-					break;
-				case 2:
-					ImGui::DragFloat2("pos", gfxP0.ptr(), 0.25, -100, 1000, "%0.2f");
-					ImGui::DragFloat("radius", gfxSize.ptr(), 0.25, -100, 1000, "%0.2f");
-					ImGui::DragFloat("segments", gfxSize.ptr() + 1, 1, 0, 100, "%1.0f");
-					break;
-				case 3:
-					ImGui::DragFloat2("p0", gfxP0.ptr(), 0.25, -100, 1000, "%0.2f");
-					ImGui::DragFloat2("p1", gfxP0.ptr()+2, 0.25, -100, 1000, "%0.2f");
-					ImGui::DragFloat2("p2", gfxSize.ptr(), 0.25, -100, 1000, "%0.2f");
-					break;
-				default:
-					break;
-			}
-
-			bool previewMode = true;
-			if (ImGui::Button("OK")) {
-				switch (gfxShapes) {
-					case 0:
-						setGeomColor(gfxColor);
-						drawQuad(gfxP0.x, gfxP0.y, gfxP0.x + gfxSize.x, gfxP0.y + gfxSize.y);
-						break;
-					case 1:
-						setGeomColor(gfxColor);
-						drawCircle(gfxP0.x, gfxP0.y, gfxSize.x, gfxSize.y);
-						break;
-					case 2:
-						setGeomColor(gfxColor);
-						drawDisc(gfxP0.x, gfxP0.y, gfxSize.x, gfxSize.y);
-						break;
-					case 3:
-						setGeomColor(gfxColor);
-						drawTriangle(gfxP0.x, gfxP0.y, gfxP0.z, gfxP0.w,gfxSize.x, gfxSize.y);
-						break;
-				}
-				ImGui::CloseCurrentPopup();
-				previewMode = false;
-			}
-			if (ImGui::Button("Dismiss")) {
-				restoreState(true);
-				ImGui::CloseCurrentPopup();
-				previewMode = false;
-			}
-
-			if (previewMode) {
-				restoreState(false);
-				switch (gfxShapes) { //append shape to previous vector
-					case 0:
-						setGeomColor(gfxColor);
-						drawQuad(gfxP0.x, gfxP0.y, gfxP0.x + gfxSize.x, gfxP0.y + gfxSize.y);
-						break;
-					case 1:
-						setGeomColor(gfxColor);
-						drawCircle(gfxP0.x, gfxP0.y, gfxSize.x, gfxSize.y);
-						break;
-					case 2:
-						setGeomColor(gfxColor);
-						drawDisc(gfxP0.x, gfxP0.y, gfxSize.x, gfxSize.y);
-						break;
-					case 3:
-						setGeomColor(gfxColor);
-						drawTriangle(gfxP0.x, gfxP0.y, gfxP0.z, gfxP0.w, gfxSize.x, gfxSize.y);
-						break;
-				}
-			}
-			ImGui::EndPopup();
-		}
-		ImGui::Unindent();
 	}
-}
+	r2::Node::im();
 
+}
 
 void r2::Batch::im() {
 	using namespace ImGui;
@@ -1181,9 +1170,14 @@ void r2::Batch::im() {
 
 	if (CollapsingHeader(ICON_MD_COLLECTIONS " Batch")) {
 		Indent();
-		LabelText("nbElems", "%d",	nbElems);
-		LabelText("nbSubmit", "%d",	nbSubmit);
-		LabelText("bufSize", "%lu", fbuf.capacity());
+		ImGui::Text("Number of elements: %d", nbElems);
+		ImGui::Text("Number of submit: %d",	nbSubmit);
+		Indent();
+		int i = 0;
+		for (BufferCache cache : bufCache) {
+			ImGui::Text("Submit " + to_string(i++) + " fbuf size : " + to_string(cache.fbuf.size()));
+		}
+		Unindent();
 
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(1, 4));
 		if (ImGui::Button(ICON_MD_ADD)) {
@@ -1264,205 +1258,213 @@ void r2::Text::im() {
 	if (ImGui::CollapsingHeader(ICON_MD_TEXT_FIELDS " Text")) {
 		ImGui::Indent();
 
-		ImGui::SetNextItemWidth(150);
-		if (ImGui::BeginCombo("Font", fnt->getResourceName().c_str())) {
-			rd::FontManager& fntMgr = rd::FontManager::get();
-			std::vector<pair<Str, rd::Font*>>fonts(fntMgr.map.begin(), fntMgr.map.end());
-			sort(fonts.begin(), fonts.end(), [](auto & p0, auto & p1) {
-				return p0.first < p1.first;
-			});
-			for (auto fntPair: fonts) {
-				if (ImGui::Selectable(fntPair.second->getResourceName().c_str()))
-					setFont(fntPair.second);
-				if (fntPair.second == fnt) ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-
-		ImGui::Text("Text:");
-		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-		if (ImGui::InputTextMultiline("##textEdit", text, ImVec2(0, ImGui::GetTextLineHeight() * 5))) {
-			cache();
-		}
-
-		ImGui::Text("Alignement:");
-		static int mode = 0;
-		PushStyle((blockAlign & (ALIGN_HCENTER | ALIGN_RIGHT)) == ALIGN_LEFT);
-		if (ImGui::Button(ICON_MD_ALIGN_HORIZONTAL_LEFT)) { blockAlign &= ~(ALIGN_RIGHT | ALIGN_HCENTER); cache(); } ImGui::SameLine(); PopStyle();
-		PushStyle((blockAlign & ALIGN_HCENTER) == ALIGN_HCENTER);
-		if (ImGui::Button(ICON_MD_ALIGN_HORIZONTAL_CENTER)) { blockAlign |= ALIGN_HCENTER; blockAlign &= ~ALIGN_RIGHT; cache(); } ImGui::SameLine(); PopStyle();
-		PushStyle((blockAlign & ALIGN_RIGHT) == ALIGN_RIGHT);
-		if (ImGui::Button(ICON_MD_ALIGN_HORIZONTAL_RIGHT)) { blockAlign |= ALIGN_RIGHT; blockAlign &= ~ALIGN_HCENTER; cache(); } ImGui::SameLine(); PopStyle();
-		ImGui::Dummy(ImVec2(20, 0)); ImGui::SameLine();
-		PushStyle((blockAlign & (ALIGN_VCENTER | ALIGN_BOTTOM)) == ALIGN_TOP);
-		if (ImGui::Button(ICON_MD_ALIGN_VERTICAL_TOP)) { blockAlign &= ~(ALIGN_BOTTOM | ALIGN_VCENTER); cache(); } ImGui::SameLine(); PopStyle();
-		PushStyle((blockAlign & ALIGN_VCENTER) == ALIGN_VCENTER);
-		if (ImGui::Button(ICON_MD_ALIGN_VERTICAL_CENTER)) { blockAlign |= ALIGN_VCENTER; blockAlign &= ~ALIGN_BOTTOM; cache(); } ImGui::SameLine(); PopStyle();
-		PushStyle((blockAlign & ALIGN_BOTTOM) == ALIGN_BOTTOM);
-		if (ImGui::Button(ICON_MD_ALIGN_VERTICAL_BOTTOM)) { blockAlign |= ALIGN_BOTTOM; blockAlign &= ~ALIGN_VCENTER; cache(); } PopStyle();
-
-		ImGui::PushItemWidth(60);
-		ImGui::PushID("colors");
-
-		ImGui::Text("Base Color:");
-		ImGui::PushID(&colors[0]);
-		bool changed = false;
-		ImGui::SetNextItemWidth(209);
-		changed |= ImGui::ColorEdit3("color", colors[0].col.ptr());
-		changed |= ImGui::SliderFloat("alpha", &colors[0].col.a, 0, 2.0);
-		if (changed)
-			cache();
-		ImGui::PopID();
-
-		float fontSize = getFontSize();
-		bool autoSize = autoSizeTarget != nullopt;
-		if (DragFloat("Font Size", &fontSize, 1.0, 0.0, 200)) {
-			setFontSize(fontSize);
-		}
-
-		bool autoSizeChanged = Checkbox("autoSize", &autoSize);
-		if( autoSize ){
-			Indent();
-			if (!autoSizeTarget)
-				autoSizeTarget = fontSize;
-			bool changed = DragInt("autoSize Target", &(*autoSizeTarget), 8, 256);
-			if (!autoSizeWidth)
-				autoSizeWidth = width();
-			changed |= DragInt("autoSize Max Width", &(*autoSizeWidth), 8, 1024);
-			if (changed)
-				autosize(*autoSizeWidth, *autoSizeTarget);
-			Unindent();
-		}
-		else {
-			autoSizeTarget = nullopt;
-			autoSizeWidth = nullopt;
-			autoSizeTarget = nullopt;
-		}
-
-		DragInt("italic", italicBend);
-
-
-		if (DragInt("Max Line Width (px at 100% scale) ", &originalMaxLineWidth, 1, -1, 1024)) {
-			setMaxLineWidth(originalMaxLineWidth);
-			cache();
-		}
-		Value("Max Effective line width", maxLineWidth);
-
-		if (ImGui::TreeNodeEx("Color Ranges")) {
-
-			for (int i = 1; i < colors.size(); i++) {
-				ImGui::PushID(&colors[i]);
-				ImGui::Spacing();
-				ImGui::Text("Range %d", i);
-				ImGui::SameLine();
-				if (ImGui::Button(ICON_MD_DELETE)) {
-					colors.erase(colors.begin() + i);
-					ImGui::PopID();
-					break;
-				}
-				bool changed = false;
-				changed |= ImGui::SliderInt("start", &colors[i].start, 0, text.size()); ImGui::SameLine();
-				changed |= ImGui::SliderInt("end", &colors[i].end, -1, text.size());
-				ImGui::SetNextItemWidth(209);
-				changed |= ImGui::ColorEdit3("color", colors[i].col.ptr());
-				changed |= ImGui::SliderFloat("alpha", &colors[i].col.a, 0, 2.0); ImGui::SameLine();
-				changed |= ImGui::Checkbox("multiply", &colors[i].multiply);
-				if (changed)
-					cache();
-				ImGui::PopID(); 
-				ImGui::Separator();
-			}
-
-			if (ImGui::Button(ICON_MD_ADD)) {
-				addTextColor(r::Color(), 0, -1);
-			}
-			ImGui::TreePop();
-		}
-		ImGui::PopID();
-
-		ImGui::PushID("ds");
-		if (dropShadow) {
-			if (ImGui::TreeNodeEx("Drop Shadow", ImGuiTreeNodeFlags_DefaultOpen)) {
-				bool changed = false;
-				ImGui::SetNextItemWidth(124);
-				changed |= ImGui::SliderFloat2("dx/dy", &dropShadow->dx, 0, 16);
-				ImGui::SetNextItemWidth(209);
-				changed |= ImGui::ColorEdit3("color",dropShadow->col.ptr());
-				changed |= ImGui::SliderFloat("alpha", &dropShadow->col.a, 0, 2.0f);
-				if (ImGui::Button("Remove drop shadow")) {
-					delete dropShadow; dropShadow = nullptr;
-					changed = true;
-				}
-				if (changed)
-					cache();
-				ImGui::TreePop();
-			}
-		}
-		else {
-			if (ImGui::Button("Add drop shadow")) {
-				addDropShadow(1, 1, Color(0, 0, 0, 1));
-			}
-		}
-		ImGui::PopID();
-
-		ImGui::PushID("ol");
-		if (outline) {
-			if (ImGui::TreeNodeEx("Outline", ImGuiTreeNodeFlags_DefaultOpen)) {
-				bool changed = false;
-				ImGui::SetNextItemWidth(209);
-				changed |= ImGui::ColorEdit3("color", outline->col.ptr());
-				changed |= ImGui::SliderFloat("alpha", &outline->col.a, 0, 2.0f);
-				changed |= ImGui::DragFloat("delta", &outline->delta, 0.1f, 0, 2.5f);
-				if (ImGui::Button("Remove outline")) {
-					delete outline; outline = nullptr;
-					changed = true;
-				}
-				if (changed)
-					cache();
-				ImGui::TreePop();
-			}
-		}
-		else {
-			if (ImGui::Button("Add outline")) 
-				addOutline(Color(0, 0, 0, 1));
-		}
-		if (ImGui::Button("[DBG]cache"))
-			cache();
-
-		if( TreeNode("elInfos")){
-			for(auto& e : elInfos){
-				if (TreeNode(std::to_string(e.first))) {
-					Value("uid", e.first);
-					Value("charcode", e.second.charcode);
-					Value("lineIdx", e.second.lineIdx);
-					TreePop();
-				}
-				if( IsItemHovered()){
-					auto el = getByUID(e.first);
-					r2::Im::bounds( el,2);
-				}
-			}
-			TreePop();
-		}
-
-		if (TreeNode("lineInfos")) {
-			int idx = 0;
-			for (auto& l : lineInfos) {
-				Value("idx", idx);
-				Value("width", l.width);
-				Value("bottom", l.bottom);
-				idx++;
-			}
-			TreePop();
-		}
-
-
-		ImGui::PopID();
-			ImGui::PopItemWidth();
+		textIm();
+		
 		ImGui::Unindent();
 
 		
 	}
+}
+
+void r2::Text::textIm(){
+	using namespace ImGui;
+	ImGui::SetNextItemWidth(150);
+	if (ImGui::BeginCombo("Font", fnt->getResourceName().c_str())) {
+		rd::FontManager& fntMgr = rd::FontManager::get();
+		std::vector<pair<Str, rd::Font*>>fonts(fntMgr.map.begin(), fntMgr.map.end());
+		sort(fonts.begin(), fonts.end(), [](auto& p0, auto& p1) {
+			return p0.first < p1.first;
+		});
+		for (auto fntPair : fonts) {
+			if (ImGui::Selectable(fntPair.second->getResourceName().c_str()))
+				setFont(fntPair.second);
+			if (fntPair.second == fnt) ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+
+	ImGui::Text("Text:");
+	if( ImGui::InputText("Translation Key", translationKey) )
+		tryTranslate();
+	ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+	if (ImGui::InputTextMultiline("##textEdit", text, ImVec2(0, ImGui::GetTextLineHeight() * 5))) {
+		//for rich texts we have to use setText and not other fancy stuff
+		setText(text);
+	}
+
+	ImGui::Text("Alignement:");
+	static int mode = 0;
+	PushStyle((blockAlign & (ALIGN_HCENTER | ALIGN_RIGHT)) == ALIGN_LEFT);
+	if (ImGui::Button(ICON_MD_ALIGN_HORIZONTAL_LEFT)) { blockAlign &= ~(ALIGN_RIGHT | ALIGN_HCENTER); cache(); } ImGui::SameLine(); PopStyle();
+	PushStyle((blockAlign & ALIGN_HCENTER) == ALIGN_HCENTER);
+	if (ImGui::Button(ICON_MD_ALIGN_HORIZONTAL_CENTER)) { blockAlign |= ALIGN_HCENTER; blockAlign &= ~ALIGN_RIGHT; cache(); } ImGui::SameLine(); PopStyle();
+	PushStyle((blockAlign & ALIGN_RIGHT) == ALIGN_RIGHT);
+	if (ImGui::Button(ICON_MD_ALIGN_HORIZONTAL_RIGHT)) { blockAlign |= ALIGN_RIGHT; blockAlign &= ~ALIGN_HCENTER; cache(); } ImGui::SameLine(); PopStyle();
+	ImGui::Dummy(ImVec2(20, 0)); ImGui::SameLine();
+	PushStyle((blockAlign & (ALIGN_VCENTER | ALIGN_BOTTOM)) == ALIGN_TOP);
+	if (ImGui::Button(ICON_MD_ALIGN_VERTICAL_TOP)) { blockAlign &= ~(ALIGN_BOTTOM | ALIGN_VCENTER); cache(); } ImGui::SameLine(); PopStyle();
+	PushStyle((blockAlign & ALIGN_VCENTER) == ALIGN_VCENTER);
+	if (ImGui::Button(ICON_MD_ALIGN_VERTICAL_CENTER)) { blockAlign |= ALIGN_VCENTER; blockAlign &= ~ALIGN_BOTTOM; cache(); } ImGui::SameLine(); PopStyle();
+	PushStyle((blockAlign & ALIGN_BOTTOM) == ALIGN_BOTTOM);
+	if (ImGui::Button(ICON_MD_ALIGN_VERTICAL_BOTTOM)) { blockAlign |= ALIGN_BOTTOM; blockAlign &= ~ALIGN_VCENTER; cache(); } PopStyle();
+
+	ImGui::PushItemWidth(60);
+	ImGui::PushID("colors");
+
+	ImGui::Text("Base Color:");
+	ImGui::PushID(&colors[0]);
+	bool changed = false;
+	ImGui::SetNextItemWidth(209);
+	changed |= ImGui::ColorEdit3("color", colors[0].col.ptr());
+	changed |= ImGui::DragFloat("alpha", &colors[0].col.a, 0.05f, 0, 2.0f);
+	if (changed)
+		cache();
+	ImGui::PopID();
+
+	float fontSize = getFontSize();
+	bool autoSize = autoSizeTarget != nullopt;
+	if (DragFloat("Font Size", &fontSize, 1.0, 0.0, 200)) {
+		setFontSize(fontSize);
+	}
+
+	bool autoSizeChanged = Checkbox("autoSize", &autoSize);
+	if (autoSize) {
+		Indent();
+		if (!autoSizeTarget)
+			autoSizeTarget = fontSize;
+		bool changed = DragInt("autoSize Target", &(*autoSizeTarget), 8, 256);
+		if (!autoSizeWidth)
+			autoSizeWidth = width();
+		changed |= DragInt("autoSize Max Width", &(*autoSizeWidth), 8, 1024);
+		if (changed)
+			autosize(*autoSizeWidth, *autoSizeTarget);
+		Unindent();
+	}
+	else {
+		autoSizeTarget = nullopt;
+		autoSizeWidth = nullopt;
+	}
+
+	auto ib = italicBend;
+	if (DragInt("italic", ib)) {
+		setItalicBend(italicBend = ib);
+	}
+
+	if (DragInt("Max Line Width (px at 100% scale) ", &originalMaxLineWidth, 1, -1, 1024)) {
+		setMaxLineWidth(originalMaxLineWidth);
+		cache();
+	}
+	Value("Max Effective line width", maxLineWidth);
+
+	if (ImGui::TreeNodeEx("Color Ranges")) {
+
+		for (int i = 1; i < colors.size(); i++) {
+			ImGui::PushID(&colors[i]);
+			ImGui::Spacing();
+			ImGui::Text("Range %d", i);
+			ImGui::SameLine();
+			if (ImGui::Button(ICON_MD_DELETE)) {
+				colors.erase(colors.begin() + i);
+				ImGui::PopID();
+				break;
+			}
+			bool changed = false;
+			changed |= ImGui::SliderInt("start", &colors[i].start, 0, text.length()); ImGui::SameLine();
+			changed |= ImGui::SliderInt("end", &colors[i].end, -1, text.length());
+			ImGui::SetNextItemWidth(209);
+			changed |= ImGui::ColorEdit3("color", colors[i].col.ptr());
+			changed |= ImGui::SliderFloat("alpha", &colors[i].col.a, 0, 2.0); ImGui::SameLine();
+			changed |= ImGui::Checkbox("multiply", &colors[i].multiply);
+			if (changed)
+				cache();
+			ImGui::PopID();
+			ImGui::Separator();
+		}
+
+		if (ImGui::Button(ICON_MD_ADD)) {
+			addTextColor(r::Color(), 0, -1);
+		}
+		ImGui::TreePop();
+	}
+	ImGui::PopID();
+
+	ImGui::PushID("ds");
+	if (dropShadow) {
+		if (ImGui::TreeNodeEx("Drop Shadow", ImGuiTreeNodeFlags_DefaultOpen)) {
+			bool changed = false;
+			ImGui::SetNextItemWidth(124);
+			changed |= ImGui::SliderFloat2("dx/dy", &dropShadow->dx, 0, 16);
+			ImGui::SetNextItemWidth(209);
+			changed |= ImGui::ColorEdit3("color", dropShadow->col.ptr());
+			changed |= ImGui::SliderFloat("alpha", &dropShadow->col.a, 0, 2.0f);
+			if (ImGui::Button("Remove drop shadow")) {
+				dropShadow = nullopt;
+				changed = true;
+			}
+			if (changed)
+				cache();
+			ImGui::TreePop();
+		}
+	}
+	else {
+		if (ImGui::Button("Add drop shadow")) {
+			addDropShadow(1, 1, Color(0, 0, 0, 1));
+		}
+	}
+	ImGui::PopID();
+
+	ImGui::PushID("ol");
+	if (outline) {
+		if (ImGui::TreeNodeEx("Outline", ImGuiTreeNodeFlags_DefaultOpen)) {
+			bool changed = false;
+			ImGui::SetNextItemWidth(209);
+			changed |= ImGui::ColorEdit3("color", outline->col.ptr());
+			changed |= ImGui::SliderFloat("alpha", &outline->col.a, 0, 2.0f);
+			changed |= ImGui::DragFloat("delta", &outline->delta, 0.1f, 0, 2.5f);
+			if (ImGui::Button("Remove outline")) {
+				outline = nullopt;
+				changed = true;
+			}
+			if (changed)
+				cache();
+			ImGui::TreePop();
+		}
+	}
+	else {
+		if (ImGui::Button("Add outline"))
+			addOutline(Color(0, 0, 0, 1));
+	}
+	if (ImGui::Button("[DBG]cache"))
+		cache();
+
+	if (TreeNode("elInfos")) {
+		for (auto& e : elInfos) {
+			if (TreeNode(std::to_string(e.first))) {
+				Value("uid", e.first);
+				Value("charcode", e.second.charcode);
+				Value("lineIdx", e.second.lineIdx);
+				TreePop();
+			}
+			if (IsItemHovered()) {
+				auto el = getElementByUID(e.first);
+				r2::Im::bounds(el, 2);
+			}
+		}
+		TreePop();
+	}
+
+	if (TreeNode("lineInfos")) {
+		int idx = 0;
+		for (auto& l : lineInfos) {
+			Value("idx", idx);
+			Value("width", l.width);
+			Value("bottom", l.bottom);
+			idx++;
+		}
+		TreePop();
+	}
+	ImGui::PopID();
+	ImGui::PopItemWidth();
 }
 
 static int StrResizeCallback(ImGuiInputTextCallbackData* data) {
@@ -1501,14 +1503,14 @@ bool rd::Anon::im(rd::Anon *& selfref) {
 		case AType::AInt64: {
 			s64 smin = -1000LL;
 			s64 smax = 1000LL;
-			changed |= ImGui::DragScalarN("##val", ImGuiDataType_S64, (r::s64*) data, 1,1.0, &smin,&smax);
+			changed |= ImGui::DragScalarN("##val", ImGuiDataType_S64, &reinterpret_cast<r::s64&>(data), 1,1.0, &smin,&smax);
 			break;
 		}
 
 		case AType::AUInt64: {
 			u64 umin = 0ULL;
 			u64 umax = 1000ULL;
-			changed |= ImGui::DragScalarN("##val", ImGuiDataType_U64, (r::u64*)data, 1, 1.0, &umin, &umax);
+			changed |= ImGui::DragScalarN("##val", ImGuiDataType_U64, &reinterpret_cast<r::u64&>(data), 1, 1.0, &umin, &umax);
 			break;
 		}
 
@@ -1596,7 +1598,9 @@ bool rd::Anon::im(rd::Anon *& selfref) {
 		//	break;
 	}
 
-	ImGui::SameLine(60);
+	//remvoe because in cas of large indent values was causing hiding
+	//ImGui::SameLine(60);
+	ImGui::SameLine();
 	//change type
 	ImGui::Button(ICON_MD_SETTINGS);
 	r2::Im::anonContextMenu(this);
@@ -1629,11 +1633,86 @@ bool rd::Anon::im(rd::Anon *& selfref) {
 	return changed;
 }
 
-bool r2::Tile::im(){
+void r2::Tile::smallPreview() {
+	using namespace ImGui;
+	int w = width;
+	int h = height;
+	if (w > ImGui::GetWindowWidth()) {
+		w = ImGui::GetWindowWidth() * 0.25;
+		h = height * (w / width);
+	}
+	ImGui::Image(this, ImVec2(w, h));
+	if (debugName&& IsItemHovered()) {
+		SetTooltip(debugName);
+	}
+}
+
+bool r2::Tile::im(bool preview, bool pick){
 	using namespace ImGui;
 
 	bool changed = false;
-	
+	ImGui::PushID(this);
+	ImGui::Text("Tile info:");
+	Indent();
+
+	auto op = ImGuiTreeNodeFlags_DefaultOpen;
+	if (!preview)
+		op = {};
+	if (TreeNodeEx("Preview",op)) {
+		if (debugName)
+			Value("debug name",StrRef(debugName));
+		int w = width;
+		int h = height;
+		if( w > ImGui::GetWindowWidth()){
+			w = ImGui::GetWindowWidth() * 0.25;
+			h = height * ( w / width);
+		}
+		ImGui::Image(this, ImVec2(w, h));
+		TreePop();
+	}
+	if (tex) {
+		try {
+			if(tex->getPath())
+				ImGui::Text("tex  name   : %s", tex->getPath());
+			if (tex->getDebugName())
+				ImGui::Text("tex  dname  : %s", tex->getDebugName());
+			ImGui::Text("tex  id     : 0x%x", tex->getResourceId());
+			ImGui::Value("tex  size", Vector2i(tex->getWidth(), tex->getHeight()));
+			ImGui::Value("tile size", Vector2i(width, height));
+		}
+		catch(...){
+			ImGui::Error("INVALID Texture");
+		}
+	}
+	else {
+		ImGui::Error("No Texture !!!");
+	}
+
+	ImGui::Value("uid", uid);
+	ImGui::PushItemWidth(124);
+
+	ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal); // Prevent ImGuiSeparatorFlags_SpanAllColumns
+	if (ImGui::Button("Flip X")) {	flipX(); changed = true;} ImGui::SameLine();
+	if (ImGui::Button("Flip Y")) { flipY(); changed = true; }
+	if (pick && ImGui::Button("Pick tile")) {
+		r2::im::TilePicker::forTile(*this);
+		changed = true;//not a good solution as tile fetching might be deferred but anw...
+	}
+	ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal); // Prevent ImGuiSeparatorFlags_SpanAllColumns
+
+	r::Vector2 pivot = r::Vector2(getCenterRatioX(), getCenterRatioY());
+	if( ImGui::DragFloat2("pivot - ratio ()", pivot.ptr(),0.1f,-4.0f,4.0f ))
+		setCenterRatio(pivot.x, pivot.y);
+	changed |= ImGui::DragDouble2("pivot - pixel", &dx, 0.1, -100, 100, "%0.3lf");
+	changed |= ImGui::DragDouble2("xy", &x, 0.1, -100, 100, "%0.3lf");
+	changed |= ImGui::DragDouble2("size", &width, 0.1, -100, 100, "%0.3lf");
+	ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
+
+	ImGui::PopItemWidth();
+	ImGui::SetNextItemWidth(252);
+	changed |= ImGui::DragDouble4("uv", &u1, 0.1, -100, 100, "%.3lf");
+	ImGui::PopID();
+	Unindent();
 	return changed;
 }
 

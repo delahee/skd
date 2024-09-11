@@ -9,15 +9,15 @@ namespace ri18n{
 		Sentence,//(l : String);
 		Em,//(sub : Ast); //*
 		Strong,//(sub : Ast); //**
-		Event,//(str:String);
-		CondEvent,//(str:String);
-		UniqueEvent,//(str:String);
-		CondUniqueEvent,//(str:String);
+		Event,//(str:String); // [ev]
+		CondEvent,//(str:String); {?}
+		UniqueEvent,//(str:String); {ev}
+		CondUniqueEvent,//(str:String);[?ev]
 		ImportantEvent,//(str:String);
 		Tag,//(tag:String, sub : Ast);
 		TagFrom,//(tag:String, isRestEmpty : Bool);
 		Nop,
-		Script//(str:String);
+		Script//(str:String); // ::sc:: 
 	};
 
 	struct AstNode {
@@ -28,6 +28,7 @@ namespace ri18n{
 		AstNode*		a0Data = nullptr;
 		AstNode*		a1Data = nullptr;
 		std::string		strData;
+		Str				repl;
 		bool			isRestEmpty=false;
 
 		explicit AstNode(AstNodeType t) {
@@ -75,15 +76,14 @@ namespace ri18n{
 		void im();
 	};
 
+
 	class Nar {
 	public:
-		Nar();
-		~Nar();
+					Nar();
+					~Nar();
 
-		AstNode * make(const std::string & str);
-
+		AstNode *	make(const std::string & str);
 		std::string	stringify(AstNode*node);
-
 	protected:
 		eastl::vector<AstNode*> nodes;
 	};

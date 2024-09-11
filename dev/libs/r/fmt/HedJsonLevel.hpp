@@ -1,15 +1,7 @@
 #pragma once
 
-#include <string>
-#include <algorithm>
-#include <unordered_map>
-
-#include "r2/Types.hpp"
-
 #include "r2/Tile.hpp"
-
 #include "rd/TileLib.hpp"
-#include "1-json/jsoncpp/json.h"
 
 namespace r2 { class Node; }
 
@@ -19,15 +11,15 @@ namespace fmt{
 		public:
 			std::string		path;
 			std::string		shorthand;
-			rd::TileLib*	slb;
-			r2::Node*		pane; 
+			rd::TileLib*	slb=0;
+			r2::Node*		pane=0; 
 		};
 
 		class BmpEntry {
 		public:
 			std::string		path;
 			std::string		shorthand;
-			r2::Tile*		tile;
+			r2::Tile*		tile=0;
 		};
 
 		class TileOrigin {

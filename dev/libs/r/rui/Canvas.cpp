@@ -89,7 +89,7 @@ float Canvas::getPixelRatio() const {
 	return scaleY;
 }
 
-r2::Node* Canvas::dock(r2::Node* spr, r::DIRECTION dir, float ofs) {
+r2::Node* Canvas::dock(r2::Node* spr, rd::Dir dir, float ofs) {
 	rui::dock(spr, this, dir, ofs);
 	resizeHolder[spr] = sigOnResize.add([=]() {
 		rui::dock(spr, this, dir, ofs);
@@ -104,7 +104,7 @@ r2::Node* Canvas::dock(r2::Node* spr, r::DIRECTION dir, float ofs) {
 	return spr;
 }
 
-r2::Node* Canvas::dock(r2::Node* spr, r::DIRECTION dir, Vector2 ofs) {
+r2::Node* Canvas::dock(r2::Node* spr, rd::Dir dir, Vector2 ofs) {
 	rui::dock(spr, this, dir, ofs);
 	resizeHolder[spr] = sigOnResize.add([=]() {
 		rui::dock(spr, this, dir, ofs);
@@ -119,7 +119,7 @@ r2::Node* Canvas::dock(r2::Node* spr, r::DIRECTION dir, Vector2 ofs) {
 	return spr;
 }
 
-r2::Node* Canvas::dockOnce(r2::Node* spr, r::DIRECTION dir, Vector2 ofs) {
+r2::Node* Canvas::dockOnce(r2::Node* spr, rd::Dir dir, Vector2 ofs) {
 	rui::dock(spr, this, dir, ofs);
 	return spr;
 }

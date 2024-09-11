@@ -4,6 +4,7 @@
 
 using namespace std;
 using namespace r2;
+using namespace rd;
 using namespace r2::im;
 
 static string tempBuffer;
@@ -37,20 +38,19 @@ template<> inline void Pasta::JReflect::visit(r2::im::TilePicker& le, const char
 };
 #pragma endregion
 
-r2::im::TilePicker::TilePicker(Promise* prom) {
+r2::im::TilePicker::TilePicker(Promise* prom) : rd::Agent(&rs::Sys::enterFrameProcesses) {
 	load();
 	name = "Tile Picker";
 	pickedTile = rd::Pools::tiles.alloc();
 	this->prom = prom;
 	opened = false;
 	scheduleTermination = false;
-	rs::Sys::enterFrameProcesses.add(this);
 }
 
 r2::im::TilePicker::~TilePicker() {
 	if(prom && !prom->isSettled())
 		prom->reject(string("Window Deletion"));
-	if(pickedTile) rd::Pools::tiles.free(pickedTile);
+	if (pickedTile) pickedTile->toPool();
 	prom = nullptr;
 	opened = false;
 }
@@ -82,7 +82,7 @@ void r2::im::TilePicker::imTiles(rd::TileLib* lib) {
 			ImGui::BeginChild("lib content");
 			int x = 0, y = 0, margin = 10;
 			for (rd::TileGroup* g : groups) {
-				std::string name = g->id;
+				std::string name = g->id.c_str();
 				bool skip = false;
 				if (excludeAnimSubFrames) {
 					for (int i = 0; i < name.size(); i++)
@@ -257,13 +257,16 @@ Promise* r2::im::TilePicker::forPackage(rd::TilePackage& tpack) {
 	return p;
 }
 
-Promise* r2::im::TilePicker::forTile(r2::Tile & tile) {
+Promise* r2::im::TilePicker::forTile(r2::Tile & tile, rd::Vars * store) {
 	auto p = Promise::alloc();
 	auto tp = new r2::im::TilePicker(p);
-	p->then([&tile](Promise* lthis, std::any data) {
+	p->then([&tile,&store](Promise* lthis, std::any data) {
 		r2::Tile* t = std::any_cast<r2::Tile*>(data);
 		if( t )
 			tile.copy(*t);
+		if (store) {
+			int here = 0;
+		}
 		return data;
 	}, [](Promise* lthis, std::any err) {
 		return err;
@@ -282,17 +285,12 @@ void r2::im::TilePicker::forBitmap(r2::Bitmap* bmp){
 		r2::Tile* t = std::any_cast<r2::Tile*>(data);
 		bmp->copyTile(t);
 		if(tp->pickedLib) bmp->vars.set("rd::TileLib", tp->pickedLib->name);
-		if(tp->pickedGroup) bmp->vars.set("rd::TileGroup", tp->pickedGroup->id);
+		if(tp->pickedGroup) bmp->vars.set("rd::TileGroup", tp->pickedGroup->id.c_str());
 		return data;
 	}, [bmp, hdl](Promise* lthis, std::any err) {
 		bmp->onDeletion.remove(hdl);
 		return err;
 	});
-}
-
-void r2::im::TilePicker::pick(Promise * prom) {
-	TilePicker * picker = new TilePicker(prom);
-	rs::Sys::enterFrameProcesses.push_back(picker);
 }
 
 void r2::im::TilePicker::registerTileSource(rd::TileLib * lib) {
@@ -335,11 +333,39 @@ rd::TileLib* r2::im::TilePicker::getLib(const std::string & _name) {
 	return getLib(name);
 }
 
+void r2::im::TilePicker::unloadLib(const char * name) {
+	rd::TileLib* tl = getLib(name);
+	if (!tl) return;
+	tl->destroy();
+	unregisterTileSource(tl);
+}
+
+rd::TileLib* r2::im::TilePicker::getOrLoadLib(const char* name, rd::TPConf* tpc ){
+	rd::TileLib* tl = getLib(name);
+	if (tl) 
+		return tl;
+
+	Str64 n{ name };
+	if (!rd::String::endsWith(name,".xml"))
+		n += ".xml";
+	auto l = rd::TexturePacker::load( n.c_str(), tpc);
+	if (l) 
+		registerTileSource(l);
+	else {
+		if(name&&*name)
+			dtrace(Str() + "getOrLoadLib: No such library : "s + n);
+	}
+	return l;
+}
+
 rd::TileLib* r2::im::TilePicker::getOrLoadLib(const std::string& _name, TPConf * tpc) {
 	rd::TileLib* tl = getLib(_name);
 	if (tl) return tl;
 
 	auto l = rd::TexturePacker::load(!rd::String::endsWith(_name, ".xml")?(_name+".xml"):_name, tpc);
-	if (l) registerTileSource(l);
+	if (l) 
+		registerTileSource(l);
+	else 
+		dtrace("getOrLoadLib: No such library : "s + _name);
 	return l;
 }

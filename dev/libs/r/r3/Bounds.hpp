@@ -1,7 +1,7 @@
 #pragma once
 
 #include "r/Types.hpp"
-#include "rs/Sys.hpp"
+#include "r2/Bounds.hpp"
 
 namespace r3 {
 	struct Bounds {
@@ -41,7 +41,7 @@ namespace r3 {
 			return *this;
 		}
 
-		inline Vector3 getCenter() {
+		inline Vector3 getCenter() const {
 			return Vector3(getCenterX(), getCenterY(),getCenterZ());
 		}
 
@@ -292,6 +292,9 @@ namespace r3 {
 			return *this;
 		};
 
+		void		im();
+		r2::Bounds	toBounds2() const;
+		std::string toString() const;
 	};
 
 }

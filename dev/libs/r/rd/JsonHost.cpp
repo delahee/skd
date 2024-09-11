@@ -1,15 +1,6 @@
 #include "stdafx.h"
 
-#include <string>
-#include <algorithm>
-#include <iostream>
-
 #include "JsonHost.hpp"
-#include "1-files/FileMgr.h"
-#include "1-json/jsoncpp/json.h"
-#include "1-json/jsoncpp/reader.h"
-
-#include "r2/all.hpp"
 
 using namespace std;
 using namespace rd;
@@ -17,7 +8,6 @@ using namespace Pasta;
 using namespace Json;
 
 #define SUPER Agent
-
 double rd::JsonHost::getFloat(const char * label, const char * param)
 {
 	Value & v = all[label]; 

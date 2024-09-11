@@ -1,11 +1,6 @@
 #pragma once
 
-#include <algorithm>
-#include <unordered_map>
 #include "Agent.hpp"
-#include "1-files/File.h"
-#include "1-json/jsoncpp/json.h"
-#include "1-json/jsoncpp/reader.h"
 
 namespace rd {
 	class JsonHost : public Agent {

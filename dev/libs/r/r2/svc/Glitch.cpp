@@ -1,10 +1,15 @@
-#include "Glitch.hpp"
 #include "stdafx.h"
-#include "Glitch.hpp"
+
 #include "1-graphics/FrameBuffer.h"
 #include "1-graphics/Graphic.h"
 #include "1-time/Profiler.h"
 #include "1-graphics/FrameBuffer.h"
+
+#include "r2/RenderDoubleBuffer.hpp"
+
+#include "Glitch.hpp"
+#include "Capture.hpp"
+
 #include "../Lib.hpp"
 
 using namespace Pasta;

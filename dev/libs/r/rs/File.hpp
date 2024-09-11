@@ -1,6 +1,8 @@
 #pragma once
 
-#include <string>
+namespace rd {
+	struct Buffer;
+}
 
 //read and write files using std::filesystem::path
 namespace rs {
@@ -8,13 +10,22 @@ namespace rs {
 
 		static std::string sep();
 		static bool createDir(const std::string& path);
-		static bool exists(const std::string& path, std::string& content);
-		//regular non res files read/write
+		static bool exists(const std::string& path);
+
+		static bool listDir(const std::string& path, std::vector<std::string> & outPathes );
+		static bool enumerate(const std::string& path, const std::string& ext, std::vector<std::string> & outFiles );
+
+		//regular non res files read/write, use for assets/editor etc
 		static bool read(const std::string& path, std::string& content);
+		static bool read( const char * path, Str& content);
+
+		static bool write(const char * path, const std::string & content);
 		static bool write(const std::string & path, const std::string & content);
+		static bool write(const char* path, const rd::Buffer & content);
 
 		static bool readSaveFile(const std::string& path, std::string& content);
 		static bool writeSaveFile(const std::string& path, const std::string& content);
+		static bool copy(const std::string& from, const std::string& to);
 	};
 
 	class FileHost : public rd::Agent {

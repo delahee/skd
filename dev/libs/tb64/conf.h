@@ -23,6 +23,7 @@
 **/
 
 //	   conf.h - config & common 
+#pragma once
 #ifndef CONF_H
 #define CONF_H
 //------------------------- Compiler ------------------------------------------

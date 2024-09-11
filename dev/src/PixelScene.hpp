@@ -58,7 +58,6 @@ public:
 		VCHROMA_INTENSITY,
 		VCHROMA_SAMPLES,
 	};
-	
 
 									PixelScene(int width=-1, int height=-1);
 	virtual							~PixelScene();
@@ -84,8 +83,7 @@ public:
 	rd::Tweener						tw;
 
 public://public API
-
-	Tween*							lastTween();
+	rd::Tween*						lastTween();
 	void							travellingWithDurMs(const Vector2i& to, float durMs);
 	void							travellingWithSpeed(const Vector2i& to, float pixPerSec);
 	bool							isTravelling();
@@ -100,7 +98,7 @@ public://internal
 	virtual void					onResize(const Vector2& ns) override;
 	void							testSettings();
 	void							neutral();
-	virtual void					onEvent(InputEvent& ev) override;
+	virtual void					onEvent(rs::InputEvent& ev) override;
 	virtual rs::InputEvent			transformEvent(rs::InputEvent& ev);
 	
 	virtual void					im()override;

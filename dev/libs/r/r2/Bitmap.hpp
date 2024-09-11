@@ -1,7 +1,7 @@
 #pragma once
+
 #include "Sprite.hpp"
 #include "Tile.hpp"
-#include "1-graphics/Graphic.h"
 
 namespace rd {
 	class TileLib;
@@ -9,6 +9,7 @@ namespace rd {
 
 namespace r2 {
 	class Bitmap : public Sprite {
+		typedef Sprite Super;
 	public:
 		Tile *			tile		= nullptr;
 		bool			ownsTile	= true;
@@ -25,7 +26,7 @@ namespace r2 {
 		virtual void		reset() override;
 
 		virtual Node *		clone(Node * n)override;
-		static Bitmap *		fromImageFile(const std::string & path, r2::Node * parent = 0, r2::TexFilter filter = r2::TexFilter::TF_INHERIT);
+		static Bitmap *		fromImageFile(const char* path, r2::Node * parent = 0, r2::TexFilter filter = r2::TexFilter::TF_INHERIT);
 		static Bitmap *		fromTexture(Pasta::Texture * tex, r2::Node * parent = nullptr);
 		static Bitmap *		fromTile( r2::Tile * t, r2::Node * parent = 0, bool own = false);
 		static Bitmap *		fromColor( const r::Color & c, r2::Node * parent = 0);
@@ -37,6 +38,7 @@ namespace r2 {
 
 		static Bitmap *		fromLib( rd::TileLib * t, const char * name, r2::Node * parent = 0);
 		static Bitmap *		fromLib( rd::TileLib * t, const std::string & name, r2::Node * parent = 0);
+		static Bitmap*		fromLib(rd::TileLib* t, const Str& name, r2::Node* parent = 0) { return fromLib(t, name.c_str(), parent); };
 
 		virtual Tile *		getPrimaryTile();
 

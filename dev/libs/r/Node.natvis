@@ -15,6 +15,7 @@
       <Item Name="alpha">alpha</Item>
       <Item Name="visible">visible</Item>
       <Item Name="parent">parent</Item>
+      <Item Name="children">children</Item>
     </Expand>
   </Type>
 

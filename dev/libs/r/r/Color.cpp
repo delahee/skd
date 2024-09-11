@@ -19,6 +19,7 @@ const Color Color::Orange	= Color(1.0f, 0.5f, 0.0f, 1.0f);
 const Color Color::Pink		= Color(1.0f, 0.0f, 0.5f, 1.0f);
 const Color Color::Violet	= Color(0.5f, 0.0f, 1.0f, 1.0f); 
 
+const Color Color::Purple	= Color::fromUInt24(0x5c068c); 
 const Color Color::Salmon	= Color::fromUInt24(0xFA8072);
 const Color Color::AcidGreen= Color::fromUInt24(0x8ffe09);
 
@@ -94,6 +95,12 @@ void Color::getHSV(float *_h, float *_s, float *_v) const {
 		*_h += 360.0;
 }
 
+Vector3 r::Color::getHSV() const{
+	Vector3 res;
+	getHSV(&res.x, &res.y, &res.z);
+	return res;
+}
+
 Color r::Color::lerpHSV(Color a, Color b, float x) {
 	float aH=0;
 	float aS=0;
@@ -108,7 +115,26 @@ Color r::Color::lerpHSV(Color a, Color b, float x) {
 	return c;
 }
 
-unsigned int r::Color::toIntRGBA() const {
+r::u32 r::Color::toInt() const {
+	const float v0 = 0.0f;
+	const float v255 = 255.0f;
+	r::u32 r = (r::u32)std::clamp(this->r * v255, v0, v255);
+	r::u32 g = (r::u32)std::clamp(this->g * v255, v0, v255);
+	r::u32 b = (r::u32)std::clamp(this->b * v255, v0, v255);
+	r::u32 a = (r::u32)std::clamp(this->a * v255, v0, v255);
+	return (unsigned int)(a << 24) | (r << 16) | (g << 8) | b;
+}
+
+r::u32 r::Color::toInt24() const {
+	const float v0 = 0.0f;
+	const float v255 = 255.0f;
+	r::u32 r = (r::u32)std::clamp(this->r * v255, v0, v255);
+	r::u32 g = (r::u32)std::clamp(this->g * v255, v0, v255);
+	r::u32 b = (r::u32)std::clamp(this->b * v255, v0, v255);
+	return (unsigned int)((r << 16) | (g << 8) | b);
+}
+
+unsigned int r::Color::toIntRGBA() const {//manage slight overflows as you can
 	const float v0 = 0.0f;
 	const float v255 = 255.0f;
 	unsigned int r = (unsigned int)std::clamp(this->r*v255, v0, v255);
@@ -123,7 +149,13 @@ std::string r::Color::toHexString() const {
 	std::stringstream sstream;
 	sstream << std::hex << toInt();
 	return sstream.str();
-};
+}
+
+bool r::Color::im(const char * name){
+	//produces a big thing... which eats lot of space
+	//return ImGui::ColorPicker4(name, ptr(), NULL);
+	return ImGui::ColorEdit4(name, ptr(), ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+}
 
 Color r::Color::fromUIntRGBA(unsigned int col) {
 	Color c;
@@ -179,20 +211,78 @@ Color r::Color::colorMatrix(const Matrix44& mat) {
 	return r::Color(trans.x, trans.y, trans.z, trans.w);
 }
 
-Color r::Color::stringToColor(string col) {
+Color r::Color::stringToColor(const char * col) {
+	if (!col)	return Color::White;
+	if (!*col)	return Color::White;
+	if (*col == '#') return rd::ColorLib::fromString(col);
 
-	if		(col == "White")	return Color::White;
-	else if (col == "Black")	return Color::Black;
-	else if (col == "Grey")		return Color::Grey;
-	else if (col == "Red")		return Color::Red;
-	else if (col == "Green")	return Color::Green;
-	else if (col == "Blue")		return Color::Blue;
-	else if (col == "Yellow")	return Color::Yellow;
-	else if (col == "Cyan")		return Color::Cyan;
-	else if (col == "Magenta")	return Color::Magenta;
-	else if (col == "Orange")	return Color::Orange;
-	else if (col == "Pink")		return Color::Pink;
-	else if (col == "Violet")	return Color::Violet;
-	else						return Color::Black;
+			if (0 == stricmp(col, "White"))		return Color::White;
+	else	if (0 == stricmp(col, "Black"))		return Color::Black;
+	else	if (0 == stricmp(col, "Grey"))		return Color::Grey;
+	else	if (0 == stricmp(col, "Red"))		return Color::Red;
+	else	if (0 == stricmp(col, "Green"))		return Color::Green;
+	else	if (0 == stricmp(col, "Blue"))		return Color::Blue;
+	else	if (0 == stricmp(col, "Yellow"))	return Color::Yellow;
+	else	if (0 == stricmp(col, "Cyan"))		return Color::Cyan;
+	else	if (0 == stricmp(col, "Magenta"))	return Color::Magenta;
+	else	if (0 == stricmp(col, "Orange"))	return Color::Orange;
+	else	if (0 == stricmp(col, "Pink"))		return Color::Pink;
+	else	if (0 == stricmp(col, "Violet"))	return Color::Violet;
+	else	if (0 == stricmp(col, "Black"))		return Color::Black;
 
+	return Color::White;
+}
+
+r::Color r::Color::minValue(r::Color oc, float thresh) {
+	auto hsv = oc.getHSV();
+	r::Color nc;
+	if (hsv.z < thresh)
+		nc = r::Color::makeFromHSV(hsv.x, hsv.y, hsv.z + (thresh - hsv.z));
+	else
+		nc = oc;
+	return nc;
+};
+
+r::Color r::Color::minLum(r::Color oc, float thresh) {
+	r::Color nc;
+	float lum = oc.lumaPrecise();
+	if (lum < thresh) 
+		nc = oc.lighten(thresh - lum);
+	else
+		nc = oc;
+	return nc;
+};
+
+void r::Color::imTest(){
+	using namespace ImGui;
+
+
+	static r::Color test;
+	static float	prm = 1.0f;
+	test.im("test");
+	DragFloat("Param", &prm,0.1,-2,2);
+
+	if (TreeNode("minValue")) {
+		r::Color corrected = minValue(test, prm);
+		corrected.im("fixed");
+		TreePop();
+	}
+
+
+	if (TreeNode("minLum")) {
+		r::Color corrected = minLum(test, prm);
+		corrected.im("fixed");
+		TreePop();
+	}
+}
+
+bool r::Color::operator==(const Color& other) const { 
+	return r == other.r && g == other.g && b == other.b && a == other.a; 
+}
+
+Color r::Color::operator/(float k) const { 
+	if (!k)
+		return Color::Black;
+	float ik = 1.0f / k;
+	return *this * ik;
 }

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef B3_CPU_NARROWPHASE_H
 #define B3_CPU_NARROWPHASE_H
 

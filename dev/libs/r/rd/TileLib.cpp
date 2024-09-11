@@ -28,7 +28,8 @@ rd::TileLib::TileLib(){
 rd::TileLib::~TileLib(){
 	r2::im::TilePicker::unregisterTileSource(this);
 	tex = nullptr;
-	rd::Pools::tiles.free(tile);
+	if(tile)
+		tile->toPool();
 	tile = nullptr;
 }
 
@@ -103,6 +104,9 @@ void rd::TileLib::sliceCustom(const std::string & groupName, int frame, int x, i
 	fd.pX = 0.0;
 	fd.pY = 0.0;
 	fd.texSlot = textures.size()-1;
+	if (fd.texSlot < 0) {
+		int here = 0;
+	}
 }
   
 TileGroup * TileLib::getGroup(const char * k) {
@@ -113,8 +117,17 @@ TileGroup * TileLib::getGroup(const char * k) {
 		return (*val).second;
 }
 
+rd::TileLib* rd::TileLib::get(const char* lib){
+	return r2::im::TilePicker::getOrLoadLib(lib);
+}
+
 r2::Tile * rd::TileLib::_getTile(const std::string &  str ) {
 	return getTile(str,0,0.0,0.0);
+}
+
+r2::Tile* rd::TileLib::getTile(const Str& str, int frame, float px, float py, r2::Tile* res) {
+	if (frame < 0) frame = 0;
+	return getTile(str.c_str(), frame, px, py, res);
 }
 
 r2::Tile * rd::TileLib::getTile(const std::string & str, int frame, float px, float py, r2::Tile * res) {
@@ -124,10 +137,12 @@ r2::Tile * rd::TileLib::getTile(const std::string & str, int frame, float px, fl
 
 r2::Tile * rd::TileLib::getTile(const char * str, int frame, float px, float py, r2::Tile * res){
 	if (frame < 0) frame = 0;
+	auto gr = getGroup( str);
 	FrameData * fd = getFrameData( str, frame);
 	if (fd == nullptr ) {
 #ifdef _DEBUG
-		cout << "unable to find frame :" << str << endl;
+		if( strlen(str))
+			cout << "unable to find frame :" << str << "\n";
 #endif
 		if (defaultTileName.size() > 0) 
 			return getTile(defaultTileName, 0, px, py, res);
@@ -143,6 +158,8 @@ r2::Tile * rd::TileLib::getTile(const char * str, int frame, float px, float py,
 
 	t->dx = - (int) (fd->realFrame.x + fd->realFrame.realWid * px);
 	t->dy = - (int) (fd->realFrame.y + fd->realFrame.realHei * py);
+
+	t->debugName = gr?gr->id.c_str() : 0;
 
 	return t;
 }
@@ -210,7 +227,11 @@ bool TileLib::exists(const string & k, int frame) {
 
 bool TileLib::exists(const char * _k, int frame ) {
 	StrRef k(_k);
-	return groups.find(k) != groups.end() && groups[k]->frames.size()>frame;
+	auto pos = groups.find(k);
+	if (pos == groups.cend())
+		return false;
+	auto& f = groups[k];
+	return f->frames.size() > frame;
 }
 
 bool rd::TileLib::hasSimilar(const char* grp){
@@ -252,13 +273,10 @@ void TilePackage::serialize(Pasta::JReflect* j, const char* _name ) {
 	j->visitObjectBegin(_name);
 	j->visit(lib, "lib");
 	j->visit(group, "group");
-	if (j->isReadMode()) {
-		auto l = r2::im::TilePicker::getOrLoadLib(lib);
+	if (j->isReadMode() && !lib.empty()) {
+		auto l = r2::im::TilePicker::getOrLoadLib(lib.c_str());
 		if(l)
-			l->getTile(group, 0, 0.0, 0.0, tile);
-		else {
-
-		}
+			l->getTile(group.c_str(), 0, 0.0, 0.0, tile);
 	}
 	j->visitObjectEnd(_name);
 }
@@ -272,8 +290,7 @@ TilePackage::TilePackage(const TilePackage& tp) {
 };
 
 TilePackage::TilePackage() {
-	if (!tile)
-		tile = r2::Tile::fromWhite();
+	tile = r2::Tile::fromWhite();
 };
 
 TilePackage::~TilePackage() {
@@ -282,9 +299,43 @@ TilePackage::~TilePackage() {
 	tile = 0;
 };
 
-void TilePackage::im() {
+void rd::TilePackage::dispose() {
+	if (tile)
+		tile->destroy();
+	tile = 0;
+}
+void rd::TilePackage::setAnon(r2::Tile* t) { 
+	dispose();
+	tile = t; 
+	lib = ""; 
+	group = ""; 
+}
+
+void rd::TilePackage::empty(){
+	dispose();
+	tile = r2::Tile::fromWhite();
+	lib = "";
+	group = "";
+}
+
+rd::TilePackage rd::TilePackage::clone() const{
+	TilePackage tp;
+	tp.lib = lib;
+	tp.group = group;
+	tp.tile = tile->clone();
+	tp.cachedLib = cachedLib;
+	tp.dirty = false;
+	return tp;
+}
+
+bool TilePackage::im() {
 	using namespace ImGui;
-	if (TreeNode("Tile Package")) {
+	bool chg = false;
+
+	Str64 name = "Tile Package";
+	if (group.length())
+		name += Str16(" : ") + group;
+	if (TreeNode(name)) {
 		Value("lib", lib);
 		Value("group", group);
 		if (Button("Change Tile")) {
@@ -294,19 +345,29 @@ void TilePackage::im() {
 				dirty = true;
 				return data;
 			});
+			chg = true;
 		}
 		if (TreeNode("Tile")) {
-			tile->im();
+			chg |= tile->im();
 			TreePop();
 		}
 		TreePop();
 	}
+	return chg;
 }
 
 rd::TileLib* TilePackage::getLib() {
 	if(!cachedLib)
-		cachedLib = r2::im::TilePicker::getOrLoadLib(lib);
+		cachedLib = r2::im::TilePicker::getOrLoadLib(lib.c_str());
 	return cachedLib;
+}
+
+void rd::TileLib::aliasGroup(const char* newName, const char* oldName) {
+	auto og = getGroup(oldName);
+	if (!og) return;
+	auto ng = new rd::TileGroup(*og);
+	ng->id = newName;
+	groups[newName] = ng;
 }
 
 void rd::TileLib::setup(r2::Bitmap* to, const char* grp, int frm, float px, float py){
@@ -328,6 +389,46 @@ void rd::TileLib::setup(r2::Bitmap* to, const char* grp, int frm, float px, floa
 	return ;
 }
 
+void rd::TileLib::im() {
+	using namespace ImGui;
+	ImGui::Checkbox("RETAIN_TEXTURE_DATA", &RETAIN_TEXTURE_DATA);
+	ImGui::Checkbox("hasChanged", &hasChanged);
+	ImGui::DragFloat("defaultCenterX",&defaultCenterX);
+	ImGui::DragFloat("defaultCenterY",&defaultCenterY);
+	ImGui::DragDouble("defaultFrameRate",&defaultFrameRate);
+	ImGui::DragDouble("speed",&speed);
+	
+	//if (tex) tex->im();
+	//if (tile) tile->im();
+
+	Value("defaultTileName",defaultTileName);
+	Value("name",name);
+
+	{
+		InputText("filter", imFilter);
+
+		auto p = rs::Std::values(groups);
+		sort(p.begin(), p.end(), [](rd::TileGroup* a0, rd::TileGroup* a1) {
+			return a0->id < a1->id;
+		});
+		for (auto g : p) {
+			if (imFilter.length())
+				if (!rd::String::contains(g->id.c_str(), imFilter.c_str()))
+					continue;
+			if (TreeNode(g->id)) {
+				g->im();
+				TreePop();
+			}
+		}
+	}
+
+	for (auto& t : textures)
+		r2::Im::imTextureInfos(t);
+	for (auto& t : tiles)
+		t->im();
+	Value("updateTags",updateTags);
+}
+
 void rd::TileLib::setup(r2::BatchElem* to, const char* grp, int frm, float px, float py){
 	if (!to) return;
 	if (!grp) return;
@@ -344,4 +445,65 @@ void rd::TileLib::setup(r2::BatchElem* to, const char* grp, int frm, float px, f
 
 	tile->dx = -(int)(fd->realFrame.x + fd->realFrame.realWid * px);
 	tile->dy = -(int)(fd->realFrame.y + fd->realFrame.realHei * py);
+}
+
+void rd::TileGroup::im(){
+	using namespace ImGui;
+	Value("id",id);
+	Value("maxWid",maxWid);
+	Value("maxHei",maxHei);
+	if (TreeNode("frames")) {
+		int idx = 0;
+		for (auto& f : frames) {
+			if (TreeNode(Str16f("%d##%x", idx, this))) {
+				f.im();
+				TreePop();
+			}
+			idx++;
+		}
+		TreePop();
+	}
+	if (TreeNode("anim frames")) {
+		int idx = 0;
+		for (auto& f : anim) {
+			Value("idx",idx);
+			SameLine();  Value("fr", f);
+			if (TreeNode("frame")) {
+				frames[anim[idx]].im();
+				TreePop();
+			}
+			idx++;
+		}
+		TreePop();
+	}
+	if(lib)
+	if( TreeNode( lib->name )){
+		lib->im();
+		TreePop();
+	}
+}
+
+void rd::FrameData::im(){
+	using namespace ImGui;
+	Value("hasPivot",hasPivot);
+	Value("x", x);
+	Value("y", y);
+	Value("wid",wid );
+	Value("hei", hei );
+	Value("texSlot", texSlot );
+	Value("pX", pX);
+	Value("pY", pY);
+}
+
+void rd::TilePackage::writeTo(rd::Vars& v)const {
+	v.set("lib", lib.c_str());
+	v.set("group", group.c_str());
+}
+
+bool rd::TilePackage::readFrom(const rd::Vars& v) {
+	if (!v.has("lib"))
+		return false;
+	lib = v.getString("lib");
+	group = v.getString("group");
+	return true;
 }

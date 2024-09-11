@@ -1,4 +1,5 @@
 #pragma once
+#include "r3/Sprite3D.hpp"
 
 namespace r3 {
 	class Cube3D : public Sprite3D {

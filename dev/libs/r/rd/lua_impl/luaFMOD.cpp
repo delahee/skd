@@ -8,7 +8,11 @@ using namespace std;
 using namespace r2;
 using namespace rd;
 using namespace Pasta; 
- {
+
+#include "rd/PointerWrapper.hpp"
+
+#ifndef HBC_NO_LUA_FMOD
+void LuaScriptHost::injectFmod(sol::state & luaSol) {
 	luaSol.new_usertype<PointerWrapper<FMOD::Studio::EventDescription*>>("EventList",
 		sol::constructors<PointerWrapper<FMOD::Studio::EventDescription*>(int)>(),
 		//"GetPtr", &PointerWrapper<FMOD::Studio::EventDescription*>::GetPtr,			// DIDN'T WORK FOR NO REASON, use void* instead
@@ -50,3 +54,7 @@ using namespace Pasta;
 		}
 	);
 }
+#else
+void LuaScriptHost::injectFmod(sol::state& luaSol) {
+	}
+#endif

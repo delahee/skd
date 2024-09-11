@@ -13,8 +13,7 @@ static string uLuminanceVector = ("uLuminanceVector");
 Bloom::Bloom() : ctrl(nullptr,nullptr){
 }
 
-void r2::svc::Bloom::bmpOpHighPass(r2::Bitmap & bmp)
-{
+void r2::svc::Bloom::bmpOpHighPass(r2::Bitmap & bmp){
 	bmp.mkUber();
 	bmp.shaderFlags |= USF_Bloom;
 	bmp.updateShaderParam(uPass, ctrl.pass);
@@ -83,9 +82,9 @@ r2::Tile * r2::svc::Bloom::make(r2::Tile * tile)
 	bBlur->removeAllChildren();
 	compoNode->removeAllChildren();
 
-	rd::Pools::bitmaps.free(bSrc);
-	rd::Pools::bitmaps.free(bBlur);
-	rd::Pools::nodes.free(compoNode);
+	rd::Pools::bitmaps.release(bSrc);
+	rd::Pools::bitmaps.release(bBlur);
+	rd::Pools::nodes.release(compoNode);
 
 	workingTile.copy(*composite.getWorkingTile());
 	drawingTile = *composite.rd.getDrawingTile();

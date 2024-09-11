@@ -9,10 +9,12 @@
 
 r2::Scissor::Scissor(Node* parent) : SUPER(parent){
 	rect = r2::Rect(0,0,rs::Display::width(), rs::Display::height());
+	setName("r2::Scissor");
 }
 
 r2::Scissor::Scissor(Rect r, Node * parent) : SUPER(parent){
 	rect = r;
+	setName("r2::Scissor");
 }
 
 void r2::Scissor::drawRec(rs::GfxContext * _g) {

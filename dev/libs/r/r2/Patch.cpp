@@ -13,6 +13,10 @@ using namespace r2;
 
 static inline const int stride = 5;
 
+r2::Patch::Patch(r2::Node* parent) : r2::Sprite(parent) {  
+	setName("r2::Patch");
+}
+
 void r2::Patch::process(rs::GfxContext* g) {
 	for (auto& p : elems) {
 		Tile* tile = &p.t;

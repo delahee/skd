@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_map>
-#include <optional>
 #include "r2/Node.hpp"
 
 using std::optional;
@@ -61,7 +59,9 @@ namespace r2 {
 			if (onOff)
 				isBreak = false;
 			isAbsolute = onOff;
-		}
+		};
+
+		void im();
 	};
 
 	class ConstraintManager {
@@ -169,10 +169,12 @@ namespace r2 {
 			updateConstraint();
 		};
 
-		inline void					vertical() { layout = FlowLayout::Vertical; };
+		inline void					vertical() { layout = FlowLayout::Vertical; needReflow = true; };
+		inline void					horizontal() { layout = FlowLayout::Horizontal; needReflow = true; };
 		void						updateConstraint();
 
 									Flow(r2::Node* parent);
+		virtual						~Flow();
 
 		FlowItemProperty&			getProperties(r2::Node* elem);
 		const FlowItemProperty&		getProperties(r2::Node* e) const;
@@ -183,8 +185,8 @@ namespace r2 {
 		virtual void				onRemoveChild(Node*) override;
 		virtual void				update(double dt) override;
 
-		std::function<void(void)>	onReflow;
-		std::function<void(void)>	afterReflow;
+		rd::Sig						onReflow;
+		rd::Sig						onAfterReflow;
 
 	protected:
 		optional<int>				minWidth = std::nullopt;

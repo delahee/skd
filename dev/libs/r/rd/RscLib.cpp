@@ -16,7 +16,19 @@ using namespace Json;
 bool									rd::RscLib::allowBitArrayProduction = false;
 std::vector<TransientTexture>			rd::RscLib::transientTex;
 
-bool rd::RscLib::hasText(const std::string& path) {
+static char cvt[2048] = {0};
+
+bool rd::RscLib::has(const char* path) {
+	FileMgr::getSingleton()->convertResourcePath(path,cvt, 2048-4);
+	return FileMgr::getSingleton()->exists(cvt);
+}
+
+bool rd::RscLib::has(const std::string& path){
+	std::string npath = FileMgr::getSingleton()->convertResourcePath(path);
+	return FileMgr::getSingleton()->exists(npath);
+}
+
+bool rd::RscLib::hasText(const char* path) {
 #ifdef _DEBUG
 	if (rd::String::startsWith(path, "res")) {
 		std::cout << "res should nt be present in the path at this point ARE YOU SURE?" << std::endl;
@@ -27,7 +39,7 @@ bool rd::RscLib::hasText(const std::string& path) {
 	return FileMgr::getSingleton()->exists(npath);
 }
 
-char * rd::RscLib::getText(const std::string &path) {
+char * rd::RscLib::getText(const char* path) {
 #ifdef _DEBUG
 	if (rd::String::startsWith(path,"res")) {
 		std::cout << "res should nt be present in the path at this point ARE YOU SURE?" << std::endl;
@@ -42,9 +54,11 @@ void rd::RscLib::releaseText(char * data){
 	FileMgr::getSingleton()->release((void*)data);
 }
 
-void * rd::RscLib::getBinary(const std::string & path, unsigned int * sz) {
+void * rd::RscLib::getBinary(const char *path, r::s64 * sz) {
 	std::string npath = FileMgr::getSingleton()->convertResourcePath(path);
-	void *data = FileMgr::getSingleton()->load(npath,sz);
+	r::u32 fSize = 0;
+	void *data = FileMgr::getSingleton()->load(npath, &fSize);
+	if(sz) *sz = fSize;
 	return data;
 }
 
@@ -53,8 +67,12 @@ void rd::RscLib::releaseBinary(void * data){
 }
 
 JSONResource rd::RscLib::getJSON(const std::string &path){	
+	if (!has(path)) {
+		traceError("no such file "s + path);
+		return {};
+	}
 	JSONResource rsc;
-	rsc.data = getBinary(path);
+	rsc.data = getBinary(path.c_str());
 	
 	Json::Reader rd(Json::Features::all());
 
@@ -75,6 +93,31 @@ void rd::RscLib::compressLZ(const char * src, u32 size, char* dst, u32 & compSiz
 	compSize = fastlz_compress(src, size, dst);
 }
 
+void rd::RscLib::compressLZ(const std::string& _src, rd::Buffer& dst) {
+	rd::Buffer src;
+	src.ptr = (char*) _src.data();
+	src.size = _src.size();
+	compressLZ(src, dst);
+}
+
+void rd::RscLib::compressLZ(const rd::Buffer& src, rd::Buffer& dst){
+#ifdef _DEBUG
+	if (dst.size != 0) 
+		throw std::invalid_argument("dst must be an empty and clear buffer");
+	if (src.size < 16)
+		throw std::invalid_argument("src must be at least 16b");
+#endif
+	dst.reset();
+	int bufsize = src.size * 1.1;//spec specifies we must have at least 5% more space
+	dst.ptr = malloc(bufsize);
+	if (!dst.ptr) 
+		throw std::bad_alloc{};
+	
+	memset(dst.ptr, 0, bufsize);
+	dst.size = fastlz_compress( src.base(), src.size, dst.base());
+	int here = 0;
+}
+
 r::u32 rd::RscLib::getDecompressedSizeLZ(const char* src) {
 	return ((u32*)src)[0];
 }
@@ -86,17 +129,17 @@ void rd::RscLib::decompressLZ(const char* src, u32 size, char* dst, u32& decompS
 
 PLZResource rd::RscLib::getPLZ(std::string path) {
 	PLZResource rsc;
-	Pasta::u32 compressedSize = 0;
-	Pasta::u32 * data = (Pasta::u32*)getBinary(path, &compressedSize);
+	r::s64 compressedSize = 0;
+	r::u32 * data = (r::u32*) getBinary(path.c_str(), &compressedSize);
 	if (data == nullptr)
 		return rsc;
 
 	rsc.data = data;
-	rsc.uncompressedSize = ((Pasta::u32*)data)[0];
+	rsc.uncompressedSize = ((r::u32*)data)[0];
 	data++;
 	rsc.uncompressedData = malloc(rsc.uncompressedSize);
 	memset(rsc.uncompressedData, 0, rsc.uncompressedSize);
-	fastlz_decompress(data, compressedSize, rsc.uncompressedData, rsc.uncompressedSize);
+	fastlz_decompress(data, (int) compressedSize, rsc.uncompressedData, rsc.uncompressedSize);
 	return rsc;
 }
 
@@ -108,6 +151,12 @@ void rd::RscLib::releasePLZ(PLZResource & rsc) {
 	rsc.uncompressedSize = 0;
 }
 
+
+Pasta::TextureData* rd::RscLib::getTextureData(const char* path){
+	if (rd::String::startsWith(path, "res/"))
+		path += strlen("res/");
+	return Pasta::TextureLoader::getSingleton()->load(path);
+}
 
 /*file will stay in memory, release it asap*/
 Pasta::TextureData*	rd::RscLib::getTextureData(const std::string & path) {
@@ -163,4 +212,97 @@ rd::BitArray* rd::RscLib::getBitArray(const char* path){
 	bool exists = bitArrays.find(strp) != bitArrays.end();
 	if (!exists) return nullptr;
 	return bitArrays[StrRef(strp)];
+}
+
+bool rd::MemCache::has(const char* path){
+	return rs::Std::exists(data,path);
+}
+
+Buffer* rd::MemCache::get(const char* path) {
+	return rs::Std::get(data, path);
+}
+
+void rd::MemCache::set(const char* path, const Buffer& d){
+	data[path] = d;
+}
+
+void MemCache::im() {
+	using namespace ImGui;
+	Checkbox("enabled", &enabled);
+	for (auto& kv : data) {
+		if (TreeNode(kv.first)) {
+			Buffer b = kv.second;
+			ImGui::Text("hit %d", b.nbHit);
+			ImGui::Text("size %ld", b.size);
+			TreePop();
+		}
+	}
+}
+
+char* rd::MemCache::getCachedText(const char* path) {
+	bool useCache = enabled;
+	if (useCache) {
+		if (has(path)) {
+			Buffer* data = get(path);
+			data->nbHit++;
+			return (char*)data->ptr+data->ofs;
+		}
+	}
+	r::s64 size = 0;
+	void* content = rd::RscLib::getBinary(path, &size);
+	if (useCache)
+		set(path, { content, size, 0 });
+	return (char*)content;
+}
+
+void rd::MemCache::prefetchFile(const char* path) {
+	if (has(path)) {
+		Buffer* data = get(path);
+		data->nbHit++;
+		return;
+	}
+	r::s64 size = 0;
+	void* content = rd::RscLib::getBinary(path, &size);
+	set(path, { content, size, 0 });
+}
+
+bool rd::MemCache::getCachedFile(const char* path, Str& dest) {
+	bool useCache = enabled;
+	if (useCache) {
+		if (has(path)) {
+			Buffer * data = get(path);
+			data->nbHit++;
+			dest = StrRef( (char*)data->ptr + data->ofs );
+			return true;
+		}
+	}
+	r::s64 size = 0;
+	void * content = rd::RscLib::getBinary(path, &size);
+	dest = StrRef((char*)content);
+	if (useCache)
+		set(path, { content, size, 0 });
+	return content != 0;
+}
+
+MemCache rd::RscLib::fileCache;
+
+void rd::Buffer::reset() {
+	ptr = 0;
+	size = 0;
+	ofs = 0;
+	nbHit = 0;
+}
+
+void rd::Buffer::dealloc() {
+	if (ptr)
+		free(ptr);
+	ptr = 0;
+	size = 0;
+	ofs = 0;
+	nbHit = 0;
+}
+
+void* rd::Buffer::base() const{
+	u8* baseU8 =(u8*)ptr + ofs;
+	return (void*) baseU8;
 }

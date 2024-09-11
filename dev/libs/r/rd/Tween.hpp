@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-#include <algorithm>
 #include "../rs/Pool.hpp"
 #include "../rs/ITweenable.hpp"
 
@@ -38,21 +36,30 @@ namespace rd{
 	class Tween {
 	public:
 		static int			GUID				;
+
+		bool				autoReverse = false;
+
 		int					uid					= 0;
+		int					nbPlays = 1; // -1 = infini, 1 et plus = nombre d'exécutions (1 par défaut)
+
+		rs::TVar			vname = rs::TVar::VNone;
+		TType				type = TType::TLinear;
+
 		Tweener *			man					= nullptr;
 		rs::ITweenable *	parent				= nullptr;
-		rs::TVar			vname				= rs::TVar::VNone;
+		void*				userData			= nullptr;
+		
 		double				n					= 0.0;
 		double				duration			= 0.000001;//in seconds
 		double				time				= 0.0;
 		double				speed				= 0.0;
 		double				from				= 0.0;
 		double				to					= 0.0;
-		TType				type				= TType::TLinear;
-		int					nbPlays				= 1; // -1 = infini, 1 et plus = nombre d'exécutions (1 par défaut)
-		void *				userData			= nullptr;
 		double				delayMs				= -1.0;
-		bool				autoReverse			= false;
+		bool				pixelMode			= false;
+
+		r::uid				targetUID			= 0;	//for debug
+		Str					targetName;					//for debug
 
 		std::function<void(rs::ITweenable*)>			afterDelay		= nullptr;
 		std::function<void(rs::ITweenable*)>			onUpdate		= nullptr;
@@ -72,11 +79,13 @@ namespace rd{
 			int nbPlays,
 			std::function<double(double)> interpolate
 		);
-		void clear();
-		void im();
+		virtual ~Tween();
+		void	clear();
+		void	im();
 	};
 
 	class Tweener : public rd::Agent {
+		typedef rd::Agent		Super;
 	protected:
 		float					normalizeAngle(float a);
 	public:
@@ -119,16 +128,18 @@ namespace rd{
 
 		//does not call any callback
 		void					forceTerminateTween(Tween * t);
+		//does not call any callback
+		void					killAllTween(rs::ITweenable* p);
 
+		//and call backs
 		void					terminateAllTween(rs::ITweenable * p);
-		void					killAllTween(rs::ITweenable * p);
 		
 		//calls appropriate callback
 		void					terminateTween(Tween * t, bool fl_allowLoop);
 		void					terminateTween(rs::ITweenable* t, rs::TVar tv);
 
 		virtual void			update(double dt) override;
-		virtual void			dispose() override;;
+		virtual void			onDispose() override;
 		void					clear();
 		bool					im();
 
@@ -153,4 +164,7 @@ namespace rd{
 		virtual double	getValue(rs::TVar valType) { return dummyValue; };
 		virtual double	setValue(rs::TVar valType, double val) { return dummyValue=val; };
 	};
+
+	void			traceTween(const char* prefix, rd::Tween* obj);
+
 }

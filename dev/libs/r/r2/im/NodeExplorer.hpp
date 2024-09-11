@@ -1,11 +1,9 @@
 #pragma once
 
-#include "r2/Node.hpp"
-#include "r2/Text.hpp"
-#include "r2/Graphics.hpp"
 #include "rd/Agent.hpp"
 
 namespace r2 {
+	class Node;
 	namespace im {
 		class NodeExplorer : public rd::Agent {
 		public:

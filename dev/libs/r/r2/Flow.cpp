@@ -7,25 +7,32 @@
 using namespace std;
 using namespace r2;
 
-static auto _id = []() {};
 
 //see https://github.com/HeapsIO/heaps/blob/master/h2d/Flow.hx
 Flow::Flow(r2::Node* parent) : SUPER(parent){
-	onReflow = _id;
-	afterReflow = _id;
-	name = "Flow#" + to_string(uid);
+	setName("Flow");
 }
 
+r2::Flow::~Flow() {
+	properties.clear();
+}
+
+FlowItemProperty s_dummy;
 FlowItemProperty& Flow::getProperties(r2::Node* e) {
 	needReflow = true;
 	int idx = getChildIndex(e);
-	if (idx == -1)
-		throw "failure to retrieve element, it's probably not in the children";
+	if (idx == -1) {
+		traceError("failure to retrieve element, it's probably not in the children");
+		return s_dummy;
+	}
 	return properties[idx];
 }
 
 const FlowItemProperty& Flow::getProperties(r2::Node* e) const {
-	return properties[getChildIndex(e)];
+	auto idx = getChildIndex(e);
+	if (idx < 0)
+		return s_dummy;
+	return properties[idx];
 }
 
 void Flow::update(double dt) {
@@ -42,7 +49,6 @@ void Flow::update(double dt) {
 
 void r2::Flow::reflow() {
 	syncMatrix();
-
 	onReflow();
 
 	if (!isConstraint && (fillWidth || fillHeight)) {
@@ -149,15 +155,6 @@ void r2::Flow::reflow() {
 
 			auto pw = p.paddingLeft + p.paddingRight;
 			auto ph = p.paddingTop + p.paddingBottom;
-			if (!isAbs) {
-				if (isConstraintWidth && p.constraint) {
-					//todo add a constraint manager to manage this rather than pollute global object space 
-					// todo activate that when we have a text max width
-					//addConstraint( c, (maxInWidth - pw) / abs(c->scaleX),
-					//				(maxInHeight - ph) / abs(c->scaleX) 
-					//);
-				}
-			}
 
 			auto b = getSize(c);
 			auto br = false;
@@ -240,6 +237,7 @@ void r2::Flow::reflow() {
 				}
 				px = xmin;
 				xmin += p.calculatedWidth + horizontalSpacing;
+				break;
 			case  FlowAlign::Middle:
 				if (midSpace == 0) {
 					auto _remSize = p.calculatedWidth + remSize(i + 1);
@@ -248,9 +246,11 @@ void r2::Flow::reflow() {
 				}
 				px = xmin;
 				xmin += p.calculatedWidth + horizontalSpacing;
+				break;
 			default:
 				px = xmin;
 				xmin += p.calculatedWidth + horizontalSpacing;
+				break;
 			}
 			else {
 				px = xmin;
@@ -321,14 +321,6 @@ void r2::Flow::reflow() {
 
 			auto pw = p.paddingLeft + p.paddingRight;
 			auto ph = p.paddingTop + p.paddingBottom;
-			if (!isAbs) {
-				/*
-				c.constraintSize(
-					isConstraintWidth && p.constraint ? (maxInWidth - pw) / abs(c.scaleX) : -1,
-					isConstraintHeight && p.constraint ? (maxInHeight - ph) / abs(c.scaleY) : -1
-				);
-				*/
-			}
 
 			auto b = getSize(c);
 			auto br = false;
@@ -423,7 +415,8 @@ void r2::Flow::reflow() {
 				ymin += p.calculatedHeight + verticalSpacing;
 				break;
 			}
-			c->y = py + p.offsetY + p.paddingTop;
+			c->y = std::lrint(py + p.offsetY + p.paddingTop);
+			c->trsDirty = true;
 		}
 	} 
 	break;
@@ -444,13 +437,7 @@ void r2::Flow::reflow() {
 
 			auto pw = p.paddingLeft + p.paddingRight;
 			auto ph = p.paddingTop + p.paddingBottom;
-			if (!isAbs) {
-				//c.constraintSize(
-				//	isConstraintWidth && p.constraint ? (maxInWidth - pw) / abs(c->scaleX) : -1,
-				//	isConstraintHeight && p.constraint ? (maxInHeight - ph) / abs(c->scaleY) : -1
-				//);
-			}
-
+			
 			auto b = getSize(c);
 			p.calculatedWidth = ceil(b.xMax) + pw;
 			p.calculatedHeight = ceil(b.yMax) + ph;
@@ -505,25 +492,13 @@ void r2::Flow::reflow() {
 			}
 
 			if (!isAbs || (p.horizontalAlign != nullopt))
-				c->x = px + p.offsetX + p.paddingLeft;
+				c->x = std::lrint(px + p.offsetX + p.paddingLeft);
 			if (!isAbs || (p.verticalAlign != nullopt))
-				c->y = py + p.offsetY + p.paddingTop;
+				c->y = std::lrint(py + p.offsetY + p.paddingTop);
 		}
 	}
 	break;
 	}
-
-	/*
-	if (scrollPosY != 0) {
-		int i = 0;
-		int sy = int(scrollPosY);
-		for (c in children) {
-			auto p = properties[i++];
-			if (p.isAbsolute) continue;
-			c.y -= sy;
-		}
-	}
-	*/
 
 	if (realMinWidth >= 0 && cw < realMinWidth) cw = realMinWidth;
 	if (realMinHeight >= 0 && ch < realMinHeight) ch = realMinHeight;
@@ -536,29 +511,8 @@ void r2::Flow::reflow() {
 		if (isConstraintHeight && ch > maxTotHeight) ch = maxTotHeight;
 	}
 
-	//if (interactive != null) {
-	//	interactive.width = cw;
-	//	interactive.height = ch;
-	//}
-
-	//if (background != null) {
-	//	background.width = Math.ceil(cw);
-	//	background.height = Math.ceil(ch);
-	//}
-
 	calculatedWidth = cw;
 	calculatedHeight = ch;
-
-	/*if (scrollBar != null) {
-		if (contentHeight <= calculatedHeight)
-			scrollBar.visible = false;
-		else {
-			scrollBar.visible = true;
-			scrollBar.minHeight = Math.ceil(calculatedHeight);
-			scrollBarCursor.minHeight = hxd.Math.imax(1, Std.int(calculatedHeight * (1 - (contentHeight - calculatedHeight) / contentHeight)));
-			updateScrollCursor();
-		}
-	}*/
 
 	needReflow = false;
 	if ( //overflow == FlowOverflow::Scroll || 
@@ -566,18 +520,14 @@ void r2::Flow::reflow() {
 		posChanged = true;
 	}
 
-	if (debug) {
-		
-	}
-
-	//this.tmpBounds = tmpBounds;
-	afterReflow();
+	onAfterReflow();
 }
 
 void Flow::onAddChild(Node* s) {
 	int idx = getChildIndex(s);
 	properties.insert( properties.begin() + idx, FlowItemProperty());
 	needReflow = true;
+	trsDirty = true;
 }
 
 void Flow::onRemoveChild(Node*s){
@@ -607,7 +557,7 @@ static const char* FlowAligns[] = {
 };
 
 void Flow::im() {
-	SUPER::im();
+	
 	using namespace ImGui;
 	bool rebuild = false;
 	if (CollapsingHeader(ICON_MD_DASHBOARD " Flow")) {
@@ -626,6 +576,9 @@ void Flow::im() {
 
 		if (TreeNode("Control")) {
 			Checkbox("needReflow", &needReflow			);
+			if (needReflow)
+				if (Button("Reflow Now"))
+					reflow();
 
 			if (horizontalAlign) {
 				rebuild|=Combo("halign", (int*)&*horizontalAlign, FlowAligns, IM_ARRAYSIZE(FlowAligns));
@@ -714,11 +667,23 @@ void Flow::im() {
 			Value("realMinHeight  	", realMinHeight);
 			TreePop();
 		}
+		if (TreeNode("Properties")) {
+			int idx = 0;
+			for(auto & p :properties){
+				if (TreeNode(to_string(idx))) {
+					p.im();
+					TreePop();
+				}
+				idx++;
+			}
+			TreePop();
+		}
 		Unindent();
 	}
 	if (rebuild) {
 		needReflow = true;
 	}
+	SUPER::im();
 }
 
 void Flow::updateConstraint() {
@@ -748,3 +713,21 @@ void Flow::addConstraint(r2::Node* n, int x, int y) {
 
 
 #undef SUPER
+
+void r2::FlowItemProperty::im() {
+	using namespace ImGui;
+	Value("paddingLeft",paddingLeft);
+	Value("paddingTop",paddingTop);
+	Value("paddingRight",paddingRight);
+	Value("paddingBottom",paddingBottom);
+	Value("isAbsolute",isAbsolute);
+	Value("offsetX",offsetX);
+	Value("offsetY",offsetY);
+	Value("minWidth",minWidth);
+	Value("minHeight",minHeight);
+	Value("calculatedWidth",calculatedWidth);
+	Value("calculatedHeight",calculatedHeight);
+	Value("isBreak",isBreak);
+	Value("lineBreak",lineBreak);
+	Value("constraint",constraint);
+}

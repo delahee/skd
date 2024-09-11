@@ -6,6 +6,7 @@
 
 using namespace std;
 using namespace rui;
+using namespace rs;
 
 DebugWndMan::DebugWndMan(rd::AgentList* al) :rd::Agent(al){
 	name = "DebugWndMan";
@@ -23,7 +24,9 @@ void DebugWndMan::update(double dt) {
 	rd::Agent::update(dt);
 
 #if PASTA_WIN
+	auto s = Pasta::HWNDWindowMgr::getSingleton();
 	bool changed = false;
+
 	if ((rs::Input::isKeyboardKeyDown(Key::KB_CTRL_LEFT) || rs::Input::isKeyboardKeyDown(Key::KB_CTRL_RIGHT))
 		&& rs::Input::isKeyboardKeyJustPressed(Key::KB_LEFT)) {
 		if (cur <= 0)
@@ -42,13 +45,22 @@ void DebugWndMan::update(double dt) {
 		changed=true;
 	}
 
+	if ((rs::Input::isKeyboardKeyDown(Key::KB_ALT_RIGHT) || rs::Input::isKeyboardKeyDown(Key::KB_ALT_LEFT))
+		&& rs::Input::isKeyboardKeyJustPressed(Key::KB_ENTER)) {
+		auto sz = s->getWindowSize(0);
+		if (!s->IsFullscreen())
+			s->enterFullScreen(0, sz.x,sz.y, true);
+		else 
+			s->exitFullScreen(0, sz.x, sz.y);
+		changed = true;
+	}
+
 	if (changed) {
-		auto& e = resos[cur];
+		auto e = (cur < 0) ? s->getWindowSize(0) : resos[cur];
 		RECT r = {};
 		r.top = r.left = 0;
 		r.right = e.x;
 		r.bottom = e.y;
-		auto s = Pasta::HWNDWindowMgr::getSingleton();
 		s->changeWindowSizeAt(0, r);
 		auto ratio = [=]() -> std::string {
 			float r = e.x / e.y;

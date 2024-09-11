@@ -1,22 +1,27 @@
 #include "stdafx.h"
-#include "Console.hpp"
+
 #include "1-input/InputEnums.h"
+#include "rplatform/CrossPlatform.hpp"
+#include "Console.hpp"
+
 
 using namespace std;
 using namespace rd;
 using namespace r2;
 using namespace Pasta;
 
-static Console * _self = nullptr;
+Console * Console::me = nullptr;
 
-#define SUPER Node
+eastl::vector<rd::Console*> rd::Console::ALL;
+
 Console::Console(rd::Font * _fnt, r2::Node * parent) : fnt(_fnt), Node(parent) {
-	_self = this;
+	me = this;
 	name = "Console";
 	producer = new r2::Text(fnt, nullptr);
 	producer->name = "cons.prod";
-
+	hostLua = new sol::state();
 	LH = fnt->getSize() + 2;
+	nodeFlags |= NF_ALPHA_UNDER_ZERO_SKIPS_DRAW;
 
 	if (getScene()) {
 		Scene * sc = getScene();
@@ -47,20 +52,31 @@ Console::Console(rd::Font * _fnt, r2::Node * parent) : fnt(_fnt), Node(parent) {
 	};
 
 	init();
+	ALL.push_back(this);
 }
 
 Console::~Console() {
-#if _DEBUG
-	printf("deleting console\n");
-#endif
+	if (me == this)
+		me = 0;
 
-	deleteAllChildren();
+	InputMgr* mgr = InputMgr::getSingleton();
+	if(mgr) mgr->removeControllerListener(this);
+
+	rs::Std::remove(ALL, this);
+	if (ALL.size() == 0)
+		rs::Sys::traceOverride = nullptr;
+
+	destroyAllChildren();
 	sb = nullptr;
 	if (producer) {
-		delete producer;
+		producer->destroy();
 		producer = nullptr;
 	}
 	fnt = nullptr;
+
+	if (hostLua)
+		delete hostLua;
+	int here = 0;
 }
 
 void rd::Console::init() {
@@ -69,16 +85,16 @@ void rd::Console::init() {
 
 void rd::Console::release() {
 	if (scriptingBackend == rd::ScriptLanguage::LUA) {
-		hostLua.collect_garbage();
-		hostLua = sol::state();
+		hostLua->collect_garbage();
+		*hostLua = sol::state();
 	}
 }
 
 void Console::notifyKeyPressed(Pasta::ControllerType ctrl, Pasta::Key key) {
-	pokeFade();
+	pokeFade(false);
 }
 void Console::onConnexionChange(Pasta::ControllerType ctrl, bool connected) {
-	pokeFade();
+	pokeFade(false);
 }
 
 void Console::notifyKeyReleased(Pasta::ControllerType ctrl, Pasta::Key key) {
@@ -93,7 +109,7 @@ void Console::notifyKeyReleased(Pasta::ControllerType ctrl, Pasta::Key key) {
 		if (key == KB_SLASH || key == KB_NUMPAD_DIVIDE || key == KB_GRAVE) {
 			//focus !
 			listening = true;
-			pokeFade();
+			pokeFade(true);
 			input->focus();
 		}
 		return;
@@ -101,20 +117,17 @@ void Console::notifyKeyReleased(Pasta::ControllerType ctrl, Pasta::Key key) {
 
 	manageArchive(key);
 
-	pokeFade();
+	pokeFade(false);
 }
 
 void rd::Console::mkHost() {
 	switch (scriptingBackend) {
-	case rd::ScriptLanguage::LUA:
-		hostLua.collect_garbage();
-		hostLua = sol::state();
-		hostLua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::io, sol::lib::string, sol::lib::table);
-		hostLua.set_function("log", sol::overload(
-			[this](const char* str) { log(str); },
-			[this](std::string str) { log(str); }
-		));
-		break;
+		case rd::ScriptLanguage::LUA:
+		{
+			//deported to luaScriphHost for compile speed
+			mkLuaHost();
+			break;
+		}
 	}
 }
 
@@ -132,11 +145,11 @@ void rd::Console::manageArchive(Pasta::Key key ) {
 		archivePos = archivePos % archive.size();
 		input->setValue(archive[archivePos]);
 	}
-	pokeFade();
+	pokeFade(false);
 }
 
 void rd::Console::update(double dt){
-	SUPER::update(dt);
+	Super::update(dt);
 
 	timeToFade -= dt;
 
@@ -167,7 +180,9 @@ void rd::Console::update(double dt){
 	}
 }
 
-void rd::Console::pokeFade() {
+void rd::Console::pokeFade(bool forced) {
+	if (!forced&&discreet)
+		return;
 	visible = true;
 	timeToFade = 5.0;
 	alphaTip = 1.0;
@@ -175,18 +190,36 @@ void rd::Console::pokeFade() {
 }
 
 void Console::dispose() {
-	SUPER::dispose();
-
-	if ( sb )		sb->dispose();
-	if ( producer )	producer->dispose();
+	Super::dispose();
+	if (sb) 
+		sb->dispose();
+	if ( producer )	
+		producer->dispose();
 }
 
 bool rd::Console::hasFocus(){
 	return input->hasFocus();
 }
 
+void rd::Console::im(){
+	using namespace ImGui;
+	if (TreeNode("Console")) {
+		r2::Im::nodeButton( producer, "producer");
+		Value("archive",archive);
+		for (auto& l : lines) {
+			if (TreeNode(l.content)) {
+				l.im();
+				TreePop();
+			}
+		}
+		TreePop();
+	}
+	Super::im();
+}
+
 void Console::help() {
-	_self->log("Hello!");
+	if(me)
+		me->log("Hello!");
 }
 
 void Console::log(const std::string & str) {
@@ -194,56 +227,94 @@ void Console::log(const std::string & str) {
 }
 
 void Console::clear() {
+	for (auto& l : lines){
+		for (auto spr : l.spr) 
+			spr->destroy();
+		l.spr.clear();
+	}
+	
 	lines.clear();
 	timeToFade = -1.0;
 	visible = false;
 }
 
 void Console::log(const char * str) {
+	fullLog += str;
+	fullLog += "\n";
+
 	CLine l;
 	l.content = str;
 
 	producer->setText(str);
-
 	std::vector<r2::BatchElem*> ae = producer->getAllElements();
 	for (int i = 0; i < ae.size(); i++) {
-		r2::BatchElem * e = ae[i];
-		l.spr.push_back( e );
-		l.sprPos.push_back(Vector2(e->x, e->y));
-		sb->add(e);
+		r2::BatchElem* e = ae[i];
+		if (e){
+			e->detach();
+			l.spr.push_back(e);
+			l.sprPos.push_back(Vector2(e->x, e->y));
+			sb->add(e);
+		}
 	}
 	l.height = producer->getSize().y;
 	producer->removeAllElements();
 
 	lines.push_back(l);
 	calcLineCoords();
-	pokeFade();
+	pokeFade(false);
 }
 
 void Console::calcLineCoords() {
 	auto start = lines.begin();
-	if (lines.size() > 10)
-		start = lines.end() - 10;
+	bool full = false;
+	bool debug = false;
 
-	for (auto& l : lines) {
-		for (r2::BatchElem * e : l.spr)
-			e->visible = false;
+	if (lines.size() > 10) {
+		start = lines.end() - 10;
+		full = true;
+	}
+
+	bool cleanupWastedLines = true;
+	if( full && cleanupWastedLines){
+		int nb = start - lines.begin();
+		if (nb > 0) {
+			//if(debug) 
+			//	printf("cleaning wasted lines %d\n", nb);
+			for (int i = 0; i < nb; ++i) {
+				rd::CLine& l = *lines.begin();
+				for (auto& b : l.spr) 
+					if(b)
+						b->destroy();
+				l.spr.clear();
+				lines.erase(lines.begin());
+			}
+		}
+	}
+
+	for (rd::CLine & cl : lines) {
+		for (r2::BatchElem* e : cl.spr)
+			if (e)
+				e->visible = false;
+			//else
+			//	__debugbreak;
 	}
 
 	int total = 0;
-	for (auto iter = start; iter != lines.end(); iter++) {
+	for (auto iter = lines.begin(); iter != lines.end(); iter++) {
 		CLine & l = *iter;
 		total += l.height;
 	}
 
 	int cy = 0;
-	for (auto iter = start; iter != lines.end(); iter++) {
+	for (auto iter = lines.begin(); iter != lines.end(); iter++) {
 		CLine & l = *iter;
 		int k = 0;
 		for (r2::BatchElem * e : l.spr) {
-			e->x = l.sprPos[k].x + 1;
-			e->y = l.sprPos[k].y - total + cy - LH;
-			e->visible = true;
+			if (e) {
+				e->x = l.sprPos[k].x + 1;
+				e->y = l.sprPos[k].y - total + cy - LH;
+				e->visible = true;
+			}
 			k++;
 		}
 		cy += l.height;
@@ -252,6 +323,17 @@ void Console::calcLineCoords() {
 	bg->clear();
 	bg->setGeomColor(r::Color(0.5f, 0.3f, 0.3f, 0.2f));
 	bg->drawQuad(0, - LH - total, LW, -LH);
+}
+
+
+void Console::runAsSuperUser(const char* str){
+	auto old = isSuperUser;
+	isSuperUser = true;
+	runCommand(str);
+	isSuperUser = old;
+}
+void Console::runAsUser(const char* str) {
+	runCommand(str);
 }
 
 void Console::runCommand(const std::string & str) {
@@ -266,17 +348,38 @@ void Console::runCommand(const char * str){
 		log(str);
 		switch (scriptingBackend) {
 		case rd::ScriptLanguage::LUA:
-			hostLua.unsafe_script(str);
+			hostLua->unsafe_script(str);
 			break;
 		}
 	}
 	catch (const sol::error& e) {
-		log( std::string("Lua Error\n" ) + e.what() );
+		std::string msg = std::string("Lua Error\n") + e.what();
+		log( msg );
+		printf(msg.c_str());
 	}
 	catch (std::exception &e) {
-		log( std::string("Std Error\n" ) + e.what() );
+		std::string msg = std::string("Std Error\n") + e.what();
+		log( msg );
+		printf(msg.c_str());
 	}
 
 }
 
-#undef SUPER
+void rd::CLine::im(){
+	using namespace ImGui;
+	Checkbox("isCommand", &isCommand);
+	Value("content", content);
+	Value("height", height);
+	for (auto iter = spr.begin(); iter != spr.end(); iter++) {
+		if (!*iter) {
+			ImGui::Text("no batch elem");
+			trace("no batch elem");
+		}
+		else {
+			r2::Im::beButton(*iter);
+		}
+	}
+	for (auto iter = spr.begin(); iter != spr.end(); iter++) {
+		Value("pos", *iter);
+	}
+}

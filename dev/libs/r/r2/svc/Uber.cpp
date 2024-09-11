@@ -5,6 +5,7 @@
 using namespace std;
 using namespace Pasta;
 
+
 r2::svc::Uber::Uber() {
 	pyramidShader.resize(3);
 
@@ -34,6 +35,38 @@ r2::svc::Uber::Uber() {
 		ShaderProgH::weakLoad(shader);
 		ShaderProgH::releaseUnuse(shader);
 	}
+}
+
+
+void r2::svc::Uber::reset() {
+	distortionEnabled = false;
+	distortionAmount = Pasta::Vector4(0, 0, 1, 0);
+	downloadTransitionAmount = 1.0f;
+
+	glitchEnabled = false;
+	glitchAmount = Pasta::Vector4(0, 0, 0, 4);
+
+	chromaticEnabled = false;
+	chromaticAberrationSettings = Pasta::Vector2(0.05f, 5);
+
+	bloomEnabled = false;
+	bloomThreshold = 0.5;
+	bloomKnee = 0.5;
+	bloomIntensity = 1;
+	pyramidSize = 5;
+	bloomScale = 1;
+	bloomColor = r::Color(1, 1, 1, 1);
+
+	vignetteEnabled = false;
+	vignetteAmount = Pasta::Vector4(1, 1, 1, 0);
+	vignetteColor = r::Color(0, 0, 0, 1);
+
+	colorMatrixEnabled = false;
+	colorMatrixCtrl;
+
+	dissolveEnabled = false;
+	dissolveAmount = 0.0f;
+	dissolveZoom = 2.0f;
 }
 
 void r2::svc::Uber::bmpOp(r2::Bitmap& bmp, r::Texture* pyramidResult) {
@@ -70,11 +103,13 @@ void r2::svc::Uber::bmpOp(r2::Bitmap& bmp, r::Texture* pyramidResult) {
 	else bmp.shaderFlags &= ~USF_BloomPyramid;
 
 	if (vignetteAmount.x != 0 && vignetteEnabled) {
-		bmp.shaderFlags |= USF_Vignette;
+		bmp.shaderFlags |= (USF_Vignette| USF_RenderResolution);
 		bmp.updateShaderParam(("uVignetteAmount"), vignetteAmount.ptr(), 3);
 		bmp.updateShaderParam(("uVignetteColor"), vignetteColor.ptr(), 3);
 	}
-	else bmp.shaderFlags &= ~USF_Vignette;
+	else {
+		bmp.shaderFlags &= ~(USF_Vignette| USF_RenderResolution);
+	}
 
 	if (colorMatrixEnabled) {
 		bmp.updateShaderParam(("uColorMatrix"), colorMatrixCtrl.mat.ptr(), 4 * 4);
@@ -151,7 +186,7 @@ r2::SingleFbPage* r2::svc::Uber::computeBloomPyramid(r::Texture* tex) {
 		b->drawTo(pyramidResult->getRt(), pyramidResult->buffer, tmpSc);
 		main = pyramidResult->getRt();
 	}
-	Pools::bitmaps.free(b);
+	rd::Pools::bitmaps.release(b);
 
 	for (int i = 0; i < pyramidSize; i++)
 		r2::SurfacePool::get()->freeSfb(pyramidBuffer[i]);
@@ -215,7 +250,6 @@ void r2::svc::Uber::blit(rs::GfxContext* gfx, const Pasta::Matrix44& trs, r2::Ti
 	if (tex->isPremultipliedAlpha())
 		shaderFlags |= Pasta::Graphic::BasicShaderFlags::BSF_PREMUL_ALPHA;
 
-	Vars shaderValues;
 		if ((distortionAmount.w != 0 || downloadTransitionAmount != 0) && distortionEnabled) {
 			shaderFlags |= USF_Distortion;
 			float theta = PASTA_DEG2RAD(min(160.0f, distortionAmount.w));
@@ -243,7 +277,7 @@ void r2::svc::Uber::blit(rs::GfxContext* gfx, const Pasta::Matrix44& trs, r2::Ti
 		}
 
 		if (vignetteAmount.x != 0 && vignetteEnabled) {
-			shaderFlags |= USF_Vignette;
+			shaderFlags |= USF_Vignette | USF_RenderResolution;
 			shaderValues.set("uVignetteAmount", vignetteAmount.ptr(), 3);
 			shaderValues.set("uVignetteColor", vignetteColor.ptr(), 3);
 		}
@@ -254,7 +288,7 @@ void r2::svc::Uber::blit(rs::GfxContext* gfx, const Pasta::Matrix44& trs, r2::Ti
 		}
 
 	auto sh = r2::Lib::getShader(r2::Shader::SH_Uber, shaderFlags);
-	r2::Lib::applyShaderValues(g, sh, shaderValues);
+	r2::Lib::applyShaderValues(gfx, sh, shaderValues);
 	g->setShader(sh);
 
 	//snatch the good view matrix
@@ -321,7 +355,132 @@ void r2::svc::Uber::blit(rs::GfxContext* gfx, const Pasta::Matrix44& trs, r2::Ti
 }
 
 void r2::svc::Uber::im() {
-	
+	ImGui::PushID(this);
+	if (ImGui::CollapsingHeader(ICON_MD_MOVIE_FILTER " PostFX stack")) {
+		ImGuiTreeNodeFlags flags;
+
+		ImGui::PushItemWidth(60);
+		ImGui::Indent();
+
+			ImGui::PushID("Distortion");
+			ImGui::AlignTextToFramePadding();
+			flags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_DefaultOpen;
+			if (!distortionEnabled) flags |= ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf;
+			bool distortionOpen = ImGui::TreeNodeEx(ICON_MD_PANORAMA_HORIZONTAL " Distortion", flags);
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x);
+			if (ImGui::Button(distortionEnabled ? ICON_MD_DONE : ICON_MD_CLOSE)) distortionEnabled = !distortionEnabled;
+			else if (distortionOpen && distortionEnabled) {
+				ImGui::Indent();
+				ImGui::DragFloat("Amount", &distortionAmount.w, 0.5f, -100, 100);
+				ImGui::DragFloat("Scale", &distortionAmount.z, 0.01f, 0.01f, 5.0f);
+				ImGui::DragFloat("Download Transition", &downloadTransitionAmount, 0.01f, 0.0f, 1.0f);
+				ImGui::Unindent();
+			}
+			ImGui::PopID();
+
+		ImGui::Separator();
+
+			ImGui::PushID("Chromatic Aberration");
+			ImGui::AlignTextToFramePadding();
+			flags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_DefaultOpen;
+			if (!chromaticEnabled) flags |= ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf;
+			bool chromaticOpen = ImGui::TreeNodeEx(ICON_MD_FILTER_CENTER_FOCUS " Chromatic Aberration", flags);
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x);
+			if (ImGui::Button(chromaticEnabled ? ICON_MD_DONE : ICON_MD_CLOSE)) chromaticEnabled = !chromaticEnabled;
+			else if (chromaticOpen && chromaticEnabled) {
+				ImGui::Indent();
+				ImGui::DragFloat("Intensity", &chromaticAberrationSettings.x, 0.001f, 0.0f, 0.15f);
+				ImGui::DragFloat("Samples", &chromaticAberrationSettings.y, 0.1f, 3, 20, "%.0f");
+				ImGui::Unindent();
+			}
+			ImGui::PopID();
+
+		ImGui::Separator();
+
+			ImGui::PushID("Glitch");
+			ImGui::AlignTextToFramePadding();
+			flags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_DefaultOpen;
+			if (!glitchEnabled) flags |= ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf;
+			bool glitchOpen = ImGui::TreeNodeEx(ICON_MD_SETTINGS_INPUT_COMPOSITE " Glitch", flags);
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x);
+			if (ImGui::Button(glitchEnabled ? ICON_MD_DONE : ICON_MD_CLOSE)) glitchEnabled = !glitchEnabled;
+			else if (glitchOpen && glitchEnabled) {
+				ImGui::Indent();
+				ImGui::DragFloat("Amount", &glitchAmount.x, 0.1f);
+				glitchAmount.y *= 100.0f;
+				ImGui::DragFloat("Big glitch amount", &glitchAmount.y, 0.1f, 0.0f, 25.0f, "%0.1f%%");
+				glitchAmount.y /= 100.0f;
+				bool checked = (glitchAmount.z == 1);
+				ImGui::Checkbox("Vertical", &checked);
+				glitchAmount.z = checked ? 1 : 0;
+				ImGui::DragFloat("Resolution divider", &glitchAmount.w, 0.1f);
+
+				ImGui::Unindent();
+			}
+			ImGui::PopID();
+
+		ImGui::Separator();
+
+			ImGui::PushID("Bloom");
+			ImGui::AlignTextToFramePadding();
+			flags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_DefaultOpen;
+			if (!bloomEnabled) flags |= ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf;
+			bool bloomOpen = ImGui::TreeNodeEx(ICON_MD_FLARE " Bloom", flags);
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x);
+			if (ImGui::Button(bloomEnabled ? ICON_MD_DONE : ICON_MD_CLOSE)) bloomEnabled = !bloomEnabled;
+			else if (bloomOpen && bloomEnabled) {
+				ImGui::Indent();
+				ImGui::DragFloat("Intensity", &bloomIntensity, 0.01f, 0, 10);
+				ImGui::DragFloat("Threshold", &bloomThreshold, 0.01f, 0, 1);
+				ImGui::DragFloat("Knee", &bloomKnee, 0.01f, 0, 1);
+				ImGui::DragInt("Pyramid Size", &pyramidSize, 0.1f, 2, 8);
+				ImGui::DragFloat("Bloom Scale", &bloomScale, 0.1f);
+				ImGui::SetNextItemWidth(184);
+				ImGui::ColorEdit3("Color", bloomColor.ptr());
+				ImGui::Unindent();
+			}
+			ImGui::PopID();
+		
+		ImGui::Separator();
+
+			ImGui::PushID("Vignette");
+			ImGui::AlignTextToFramePadding();
+			flags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_DefaultOpen;
+			if (!vignetteEnabled) flags |= ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf;
+			bool vignetteOpen = ImGui::TreeNodeEx(ICON_MD_VIGNETTE " Vignette", flags);
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x);
+			if (ImGui::Button(vignetteEnabled ? ICON_MD_DONE : ICON_MD_CLOSE)) vignetteEnabled = !vignetteEnabled;
+			else if (vignetteOpen && vignetteEnabled) {
+				ImGui::Indent();
+				ImGui::DragFloat("Intensity", &vignetteAmount.x, 0.01f, 0, 3);
+				ImGui::DragFloat("Smoothness", &vignetteAmount.y, 0.01f, 0, 5);
+				ImGui::DragFloat("Roundness", &vignetteAmount.z, 0.01f, 6, 1);
+				ImGui::SetNextItemWidth(184);
+				ImGui::ColorEdit3("Color", vignetteColor.ptr());
+				ImGui::Unindent();
+			}
+			ImGui::PopID();
+
+		ImGui::Separator();
+
+			ImGui::PushID("Color Matrix");
+			ImGui::AlignTextToFramePadding();
+			flags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_DefaultOpen;
+			if (!colorMatrixEnabled) flags |= ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf;
+			bool colorMatrixOpen = ImGui::TreeNodeEx(ICON_MD_COLORIZE " Color Matrix", flags);
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x);
+			if (ImGui::Button(colorMatrixEnabled ? ICON_MD_DONE : ICON_MD_CLOSE)) colorMatrixEnabled = !colorMatrixEnabled;
+			else if (colorMatrixOpen && colorMatrixEnabled) {
+				ImGui::Indent();
+				r2::Im::imColorMatrix(colorMatrixCtrl);
+				ImGui::Unindent();
+			}
+			ImGui::PopID();
+
+		ImGui::Unindent();
+		ImGui::PopItemWidth();
+	}
+	ImGui::PopID();
 }
 
 void r2::svc::Uber::upload(){

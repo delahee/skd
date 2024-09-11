@@ -21,7 +21,7 @@ r2::svc::ColorMatrix & r2::svc::ColorMatrix::get() {
 }
 
 r2::Tile* r2::svc::ColorMatrix::make(r2::Tile * src, const r2::ColorMatrixControl& ctrl) {
-	if (ctrl.mode == ColorMatrixMode::CMM_HSV && ctrl.hue == 0.0f && ctrl.sat == 1.0f && ctrl.val == 1.0f)
+	if (ctrl.mode == ColorMatrixMode::HSV && ctrl.hue == 0.0f && ctrl.sat == 1.0f && ctrl.val == 1.0f)
 		return src;
 
 	//todo filter only the requested portion in a rt

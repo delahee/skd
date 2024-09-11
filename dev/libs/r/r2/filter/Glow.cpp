@@ -7,8 +7,8 @@ using namespace std;
 using namespace r2;
 using namespace r2::filter;
 
-#define  SUPER  r2::filter::Blur 
-r2::filter::Glow::Glow() : SUPER(){
+#define SUPER r2::filter::Blur 
+r2::filter::Glow::Glow() : SUPER() {
 	bClear	= new Bitmap();
 	bClear->releaseTile();
 
@@ -26,8 +26,8 @@ r2::filter::Glow::Glow(const Vector2& size,
 }
 
 r2::filter::Glow::~Glow(){
-	delete bClear; bClear = nullptr;
-	delete bGlow; bGlow = nullptr;
+	if(bClear) bClear->destroy(); bClear = nullptr;
+	if(bGlow) bGlow->destroy(); bGlow = nullptr;
 }
 
 void r2::filter::Glow::set(
@@ -66,7 +66,7 @@ r2::Tile * r2::filter::Glow::filterTile(rs::GfxContext * g, r2::Tile * input){
 	r2::Tile * blurred = r2::filter::Blur::filterTile(g, input);
 
 	if (forFiltering == nullptr) forFiltering = new RenderDoubleBuffer(compositingFilter);
-
+	
 	int pad = flattenPadding;
 	int w = ceil(blurred->width);
 	int h = ceil(blurred->height);
@@ -141,7 +141,9 @@ r2::Tile * r2::filter::Glow::filterTile(rs::GfxContext * g, r2::Tile * input){
 	bGlow->dispose();
 	bClear->dispose();
 
-	rd::Pools::nodes.free(n);
+	rd::Pools::nodes.release(n);
 	g->pop();
 	return rd.getDrawingTile();
 }
+
+#undef SUPER

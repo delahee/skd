@@ -269,7 +269,7 @@ void AudioEmitter2D::imEmitter() {
 	Vector3			up;
 
 	LabelText("Audio Event", "%s", event.c_str());
-	if (bank.size())
+	if (bank.length())
 		LabelText("Bank", "%s", bank.c_str());
 	if (Button("Pick Event")) {
 		ImGui::OpenPopup("Pick audio event");
@@ -287,7 +287,7 @@ void AudioEmitter2D::imEmitter() {
 				if (strstr(bnk.first.c_str(), ".strings")) continue;
 
 				if (CollapsingHeader(bnk.first.c_str())) {
-					eastl::vector<string> events = sm.getEventList(bnk.first.c_str());
+					auto events = sm.getEventList(bnk.first.c_str());
 					for (int ev = 0; ev < events.size(); ++ev) {
 						if (Selectable(events[ev].c_str(), false)) {
 							bank = bnk.first;

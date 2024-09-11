@@ -1,3 +1,4 @@
+#pragma once
 #ifndef MINISDF_H
 #define MINISDF_H
 

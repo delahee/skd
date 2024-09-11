@@ -4,6 +4,7 @@
 //
 //  Created by Xuchen Han on 4/4/20.
 //
+#pragma once
 #ifndef btReducedVectors_h
 #define btReducedVectors_h
 #include "btVector3.h"

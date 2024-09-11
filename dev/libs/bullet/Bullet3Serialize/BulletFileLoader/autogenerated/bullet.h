@@ -17,6 +17,7 @@
 * 3. This notice may not be removed or altered from any source distribution.
 */
 // Auto generated from Bullet/Extras/HeaderGenerator/bulletGenerate.py
+#pragma once
 #ifndef __BULLET_H__
 #define __BULLET_H__
 namespace Bullet {

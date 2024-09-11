@@ -16,7 +16,7 @@ subject to the following restrictions:
 StackAlloc extracted from GJK-EPA collision solver by Nathanael Presson
 Nov.2006
 */
-
+#pragma once
 #ifndef B3_STACK_ALLOC
 #define B3_STACK_ALLOC
 

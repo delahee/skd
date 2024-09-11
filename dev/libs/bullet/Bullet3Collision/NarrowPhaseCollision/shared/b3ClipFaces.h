@@ -1,3 +1,4 @@
+#pragma once
 #ifndef B3_CLIP_FACES_H
 #define B3_CLIP_FACES_H
 

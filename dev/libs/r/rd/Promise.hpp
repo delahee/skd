@@ -36,7 +36,7 @@ namespace rd {
 		* let's make promises virtualisable to allow "delete" result madness occur
 		*/
 		virtual				~Promise();
-		inline bool			isSettled() { return _succeeded || _failed; };
+		bool				isSettled() { return _succeeded || _failed; };
 		Promise*			reset();
 
 		Promise*			then(Handler accept, Handler reject);

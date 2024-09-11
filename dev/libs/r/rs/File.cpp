@@ -29,9 +29,35 @@ bool rs::File::createDir(const std::string& path){
 	return ok;
 }
 
-bool rs::File::exists(const std::string& path, std::string& content) {
+bool rs::File::exists(const std::string& path) {
 	std::filesystem::path p(path);
 	return std::filesystem::is_regular_file(path);
+}
+
+bool rs::File::copy(const std::string& from, const std::string& to) {
+	try {
+		return std::filesystem::copy_file(from, to);
+	}
+	catch(std::filesystem::filesystem_error e) {
+		traceWarning("fs err on copy");
+	}
+	return false;
+}
+
+bool rs::File::listDir(const std::string& path, std::vector<std::string>& outPathes) {
+	std::vector<std::string> & r = outPathes;
+	for (auto& p : std::filesystem::recursive_directory_iterator(path))
+		if (p.is_directory())
+			r.push_back(p.path().string());
+	return true;
+}
+
+bool rs::File::enumerate(const std::string& path, const std::string& ext, std::vector<std::string>& outFiles) {
+	std::vector<std::string>& r = outFiles;
+	for (auto& p : std::filesystem::recursive_directory_iterator(path)) 
+		if (!p.is_directory() && rd::String::containsI(p.path().string(), ext))
+			r.push_back(p.path().string());
+	return true;
 }
 
 bool rs::File::read(const std::string& path, std::string& content) {
@@ -48,7 +74,21 @@ bool rs::File::read(const std::string& path, std::string& content) {
 	return readSz > 0;
 }
 
-bool rs::File::write(const string& path, const std::string& content) {
+bool rs::File::read(const char * path, Str & content) {
+	std::filesystem::path p(path);
+	std::filesystem::path root = p.root_directory();
+	if (!std::filesystem::is_directory(root))
+		return false;
+	FILE* f = fopen(path, "rb");//read as binary to avoid fread chunk bhv
+	if (!f) return false;
+	auto sz = std::filesystem::file_size(p);
+	content.reserve(sz+1);
+	auto readSz = fread(content.c_str(), sz, 1, f);
+	fclose(f);
+	return readSz > 0;
+}
+
+bool rs::File::write(const char* path, const rd::Buffer& content) {
 	std::filesystem::path p(path);
 	std::filesystem::path root = p.root_directory();
 
@@ -58,12 +98,36 @@ bool rs::File::write(const string& path, const std::string& content) {
 		if (!std::filesystem::is_directory(root))
 			return false;
 	}
-    FILE * f = fopen(path.c_str(), "wb");
-    if (!f) return false;
-    size_t sz = fwrite(content.data(), content.size(), 1, f) > 0;
-    fclose(f);
-    return sz > 0;
+	FILE* f = fopen(path, "wb");
+	if (!f) return false;
+	size_t nbBlocksWritten = fwrite(content.base(), 1, content.size, f);
+	fflush(f);
+	fclose(f);
+	return nbBlocksWritten > 0;
 }
+
+bool rs::File::write(const char* path, const std::string& content) {
+	std::filesystem::path p(path);
+	std::filesystem::path root = p.root_directory();
+
+	if (!root.empty()) {
+		if (!std::filesystem::is_directory(root))
+			std::filesystem::create_directory(root);
+		if (!std::filesystem::is_directory(root))
+			return false;
+	}
+	FILE* f = fopen(path, "wb");
+	if (!f) return false;
+	size_t nbBlocksWritten = fwrite(content.data(), 1, content.size(), f);
+	fflush(f);
+	fclose(f);
+	return nbBlocksWritten > 0;
+}
+
+bool rs::File::write(const string& path, const std::string& content) {
+	return write(path.c_str(), content);
+}
+
 #elif defined(PASTA_NX)
 string rs::File::sep() {
 	return "/";
@@ -73,12 +137,32 @@ bool rs::File::createDir(const std::string& path) {
 	return false;
 }
 
+bool rs::File::exists(const std::string& path) {
+    return false;
+}
+
+bool rs::File::listDir(const std::string& path, std::vector<std::string>& outPathes) {
+    return false;
+}
+
+bool rs::File::enumerate(const std::string& path, const std::string& ext, std::vector<std::string>& outFiles) {
+    return false;
+}
+
 bool rs::File::read(const std::string& path, std::string& content) {
 	return false;
 }
 
 bool rs::File::write(const string& path, const std::string& content) {
 	return false;
+}
+
+bool rs::File::write(const char* path, const rd::Buffer& content) {
+	return false;
+}
+
+bool rs::File::copy(const std::string& from, const std::string& to) {
+    return false;
 }
 #endif
 

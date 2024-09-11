@@ -84,7 +84,7 @@ public:
 
 	void			spawn(const char*c) { spawn(StrRef(c)); };
 	void			spawn(Str& sp);
-	void			im();
+	bool			im();
 
 	void			loadMap();
 	void			dressMap();

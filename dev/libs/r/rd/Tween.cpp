@@ -1,14 +1,17 @@
 #include "stdafx.h"
 
 #include <cmath>
-#include <vector>
-#include <algorithm>
 
 #include "../rs/Sys.hpp"
 #include "../rs/ITweenable.hpp"
 #include "../rs/Pool.hpp"
+#include "rplatform/CrossPlatform.hpp"
 
 #include "Tween.hpp"
+
+#ifndef PASTA_FINAL
+	//#define DEBUG_TWEEN
+#endif
 
 using namespace std;
 
@@ -50,9 +53,21 @@ static std::string tv_to_string(TVar tv) {
 	}
 }
 
-void rd::Tween::reset(ITweenable * _parent, TVar _vname, double _dur,  double _from, double _to, TType _type, int _nbPlays, std::function<double(double)> _interpolate)
-{
+void rd::Tween::reset(ITweenable * _parent, TVar _vname, double _dur,  double _from, double _to, TType _type, int _nbPlays, std::function<double(double)> _interpolate){
 	parent = _parent;
+
+#ifdef DEBUG_TWEEN
+	auto asSpr = dynamic_cast<r2::Node*>(parent);
+	if (asSpr) {
+		targetUID = asSpr->uid;
+		targetName = asSpr->name;
+	}
+	else {
+		targetUID = 0;
+		targetName.clear();
+	}
+#endif
+
 	vname = _vname;
 	n = 0.0;
 	time = 0;
@@ -68,6 +83,7 @@ void rd::Tween::reset(ITweenable * _parent, TVar _vname, double _dur,  double _f
 	onUpdate = nullptr;
 	onUpdateT = nullptr;
 	onEnd = nullptr;
+	pixelMode = false;
 
 	uid = GUID++;
 }
@@ -87,7 +103,11 @@ void rd::Tween::im() {
 		Text("Parent : 0x%x", parent);
 	Text("To %.2f", to);
 	Text("From %.2f", from);
-	Text("Dur : %.2f ms",  (man->FPS * speed)*1000);
+	Text("Dur %.2f ms",  (man->FPS * speed)*1000.0f);
+	Value("Auto Reverse", autoReverse);
+	Value("Nb Plays", this->nbPlays);
+	Value("Target Value",targetUID);
+	Value("Target Name",targetName);
 
 	Text("n %f / ln %.2f", n,ln);
 	if( delayMs>0)
@@ -127,15 +147,15 @@ float rd::Tweener::normalizeAngle(float a) {
 }
 
 Tweener::Tweener() {
-
+	deleteSelf = false;
+	setName("Tweener");
 }
 
 rd::Tweener::~Tweener(){
-	dispose();
+	onDispose();
 }
 
-void rd::Tweener::dispose() {
-	Agent::dispose();
+void rd::Tweener::onDispose() {
 	clear();
 }
 
@@ -175,7 +195,7 @@ void Tweener::forceTerminateTween(Tween * t) {
 	
 	t->clear();
 	
-	pool.free(t);
+	pool.release(t);
 }
 
 void rd::Tweener::terminateAllTween(ITweenable * p) {
@@ -235,9 +255,23 @@ rd::Tween* Tweener::createColorLinear(rs::ITweenable* parent, r::Color to, rd::T
 	return main;
 }
 
+Str s_dbgBreakOnName = "body";
 rd::Tween * Tweener::create(ITweenable * parent, rs::TVar varName, double to, TType tp, double duration_ms, bool allowDup ){
 	if (parent == nullptr) return nullptr;
 	if (duration_ms == -1.0) duration_ms = DEFAULT_DURATION;
+
+#if 0
+	if (s_dbgBreakOnName.length()) {
+		
+		auto asNode = dynamic_cast<r2::Node*>(parent);
+		if (asNode) {
+			traceNode("creating tw on parent",asNode);
+		}
+		if (asNode && parent && asNode->name == s_dbgBreakOnName) {
+			__debugbreak();
+		}
+	}
+#endif
 
 	int iter = tList.size()-1;
 	Tween ** data = tList.data();
@@ -264,6 +298,10 @@ rd::Tween * Tweener::create(ITweenable * parent, rs::TVar varName, double to, TT
 	
 	tw->man = this;
 	tList.push_back(tw);
+
+	if( tw->uid == 181 || tw->uid == 182){
+		int here = 0;
+	}
 #if 0 
 	printf("tw created: %d dur:%f\n", varName, duration_ms);
 #endif
@@ -436,12 +474,12 @@ void rd::Tweener::update(double dt){
 			t->delayMs -= deltaMs;
 			if (t->delayMs <= 0.0) {
 				delayList.erase(std::find(delayList.begin(),delayList.end(),t));
+				if (t->afterDelay) t->afterDelay(t->parent);
 
 				//update value for chains
 				t->from = t->parent->getValue(t->vname);
 
 				tList.push_back(t);
-				if (t->afterDelay) t->afterDelay(t->parent);
 			}
 			iter--;
 		}
@@ -461,10 +499,22 @@ void rd::Tweener::update(double dt){
 			t->time += dt;
 			t->n = t->interpolate(ln);
 			if (ln<1) {
-				// en cours...
-				double val = 0.0;
-				val = t->from + t->n*dist;
-				t->parent->setValue(t->vname,val);
+				double val = t->from + t->n*dist;
+
+#ifdef DEBUG_TWEEN // ensure sprite consistency, this is a large cause of issues coupled with pools
+				auto asNode = dynamic_cast<r2::Node*>(t->parent);
+				if (asNode && asNode->uid != t->targetUID) {
+					trace("tween uid ", t->targetUID);
+					trace("tween vs  ", asNode->uid);
+					traceNode("tween error on node : ",asNode);
+					trace("name was"s + t->targetName.c_str());
+					rplatform::debugbreak();
+				}
+#endif
+				if(!t->pixelMode)
+					t->parent->setValue(t->vname,val);
+				else 
+					t->parent->setValue(t->vname, std::round(val));
 				onUpdate(t, ln);
 #if 0
 				printf("tw update: v:%d from:%f to:%f ln:%f \n", t->vname, t->from, t->to, t->ln);
@@ -478,23 +528,40 @@ void rd::Tweener::update(double dt){
 	}
 }
 
+rd::Tween::~Tween(){
+	//traceTween("~", this);
+}
+
 void rd::Tweener::clear(){
-	for (Tween * t : delayList) pool.free(t);
-	for (Tween * t : tList) pool.free(t);
+	for (Tween * t : delayList) pool.release(t);
+	for (Tween * t : tList) pool.release(t);
 
 	delayList.clear();
 	tList.clear();
 }
 bool rd::Tweener::im(){
 	using namespace ImGui;
-	if (ImGui::TreeNodeEx("delays",ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (!bus)
+		Text("No linked bus");
+	else
+		bus->im();
+	if (ImGui::TreeNodeEx("delayed",ImGuiTreeNodeFlags_DefaultOpen)) {
 		for (Tween* t : delayList) t->im();
 		TreePop();
 	}
-	if (ImGui::TreeNodeEx("list", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("actives", ImGuiTreeNodeFlags_DefaultOpen)) {
 		for (Tween* t : tList) t->im();
 		TreePop();
 	}
 	return false;
 }
 #undef SUPER
+
+void rd::traceTween(const char* prefix, rd::Tween* obj){
+#ifndef PASTA_FINAL
+	if (obj) {
+		Str256f msg("traceTween: %s uid:%ld targetUID:%ld targetName:%s addr:0x%x", prefix, obj->uid, obj->targetUID, obj->targetName.c_str(), obj);
+		trace(msg);
+	}
+#endif 
+}

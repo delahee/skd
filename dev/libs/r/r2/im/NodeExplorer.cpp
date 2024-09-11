@@ -15,7 +15,7 @@ NodeExplorer::NodeExplorer(r2::Node*_n,bool killPrevious) : n(_n) {
 		killAll();
 	}
 	rd::Agent::name = "Node Explorer";
-	name = n->name + " uid:" + to_string(n->uid) + "###NodeInspector";
+	name = n->name.cpp_str() + " uid:" + to_string(n->uid) + "###NodeInspector";
 	name = std::string("Properties: ") + name;
 	rs::Svc::reg(this);
 	ALL.push_back(this);
@@ -44,7 +44,7 @@ void NodeExplorer::update(double dt) {
 	ImGui::PopID();
 	ImGui::End();
 	if (!opened) {
-		delete this;
+		safeDestruction();
 		return;
 	}
 }
@@ -59,6 +59,9 @@ void NodeExplorer::cancel(r2::Node* _n) {
 }
 
 NodeExplorer* NodeExplorer::edit(r2::Node* _n) {
+#ifdef PASTA_FINAL
+	return 0;
+#endif
 	if (_n == nullptr) return 0;
 	for (NodeExplorer * ne : ALL)
 		if (ne->n == _n) 

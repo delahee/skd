@@ -21,7 +21,7 @@ Part::~Part() {
 	rs::Std::remove(ALL,this);
 }
 
-void Part::im() {
+bool Part::im() {
 	using namespace ImGui;
 
 	Value("x", x);
@@ -39,6 +39,7 @@ void Part::im() {
 	}
 	else
 		ImGui::Text("no sprite ?");
+	return false;
 }
 
 float Part::setDelay(float d){

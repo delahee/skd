@@ -1,22 +1,19 @@
 #include "stdafx.h"
 
-
-#include <memory>
+#include "1-time/Profiler.h"
+#include "4-ecs/JsonReflect.h"
 
 #include "../Tile.hpp"
 #include "../svc/Kernel.hpp"
 
 #include "Blur.hpp"
-#include "1-time/Profiler.h"
-#include "4-ecs/JsonReflect.h"
+
 
 using namespace r2;
 using namespace r2::filter;
 using namespace r2::svc;
 
-#define SUPER r2::filter::Layer
-
-Blur::Blur() : r2::filter::Layer() {
+Blur::Blur() : Super() {
 	kH = new Kernel();
 	kV = new Kernel();
 	flattenPadding = 4;
@@ -50,7 +47,7 @@ void r2::filter::Blur::invalidate() {
 
 void r2::filter::Blur::serialize(Pasta::JReflect& jr, const char* name) {
 	if (name) jr.visitObjectBegin(name);
-	SUPER::serialize(jr, 0);
+	Super::serialize(jr, 0);
 	jr.visit(size, "size");
 	jr.visit(offsetScale,"offsetScale");
 	if (name) jr.visitObjectEnd(name);
@@ -59,7 +56,7 @@ void r2::filter::Blur::serialize(Pasta::JReflect& jr, const char* name) {
 r2::Filter* r2::filter::Blur::clone(r2::Filter* _obj) {
 	Blur* obj = (Blur *)_obj;
 	if (!obj) obj = new Blur();
-	SUPER::clone(obj);
+	Super::clone(obj);
 	obj->size.x = size.x;
 	obj->size.y = size.y;
 	obj->offsetScale = offsetScale;
@@ -85,7 +82,8 @@ r2::Tile *  Blur::filterTile(rs::GfxContext * g, r2::Tile * input){
 	PASTA_CPU_GPU_AUTO_MARKER("Blur filterTile");
 	int pad = flattenPadding;
 
-	kH->rd.isSingleBuffer = kV->rd.isSingleBuffer = forFlattening->isSingleBuffer = isSingleBuffer;
+    kH->rd.setSingleBufferMode(isSingleBuffer);
+    kV->rd.setSingleBufferMode(isSingleBuffer);
 
 	if (size.x <= 0 && size.y <= 0) {
 		workingTile.copy(*input);
@@ -99,28 +97,33 @@ r2::Tile *  Blur::filterTile(rs::GfxContext * g, r2::Tile * input){
 
 	//only blur X
 	if (size.y <= 0){
-		r2::Tile * tH = kH->makeBlur1D(src->getTexture(), size.x, offsetScale, resolutionDivider, texFilter, true);
-
+		kH->makeBlur1D(src->getTexture(), size.x, offsetScale, resolutionDivider, texFilter, true);
+		
+		r2::Tile* tH = kH->rd.getWorkingTile();
 		tH->resetTargetFlip();
 		tH->setCenterDiscrete(flatteningBounds.left() - pad, flatteningBounds.top() - pad);
-		tH->resetTargetFlip();
-		workingTile.copy(*tH);
+        tH->resetTargetFlip();
+        workingTile.copy(*tH);
+        workingTile.width *= resolutionDivider; // total hack
+		workingTile.height *= resolutionDivider;
 		g->pop();
 
-		tH->width *= resolutionDivider; // total hack
-		return tH;
+		return kH->rd.getDrawingTile();
 	}
 	//only blur X
 	if (size.x <= 0) {
-		r2::Tile * tV = kV->makeBlur1D(src->getTexture(), size.y, offsetScale, resolutionDivider, texFilter, false);
+		kV->makeBlur1D(src->getTexture(), size.y, offsetScale, resolutionDivider, texFilter, false);
+		
+		r2::Tile* tV = kV->rd.getWorkingTile();
 		tV->resetTargetFlip();
 		tV->setCenterDiscrete(flatteningBounds.left() - pad, flatteningBounds.top() - pad);
-		tV->resetTargetFlip();
-		workingTile.copy(*tV);
+        tV->resetTargetFlip();
+        workingTile.copy(*tV);
+        workingTile.width *= resolutionDivider; // total hack
+		workingTile.height *= resolutionDivider;
 		g->pop();
 
-		tV->height *= resolutionDivider; // total hack
-		return tV;
+		return kV->rd.getDrawingTile();
 	}
 	
 	kH->makeBlur1D(src->getTexture(), size.x, offsetScale, resolutionDivider, texFilter, true);
@@ -130,13 +133,12 @@ r2::Tile *  Blur::filterTile(rs::GfxContext * g, r2::Tile * input){
 	tV->resetTargetFlip();
 	tV->setCenterDiscrete(ceil(flatteningBounds.left() - pad), ceil(flatteningBounds.top() - pad));
 	tV->resetTargetFlip();
-	workingTile.copy(*tV);
+    workingTile.copy(*tV);
+	workingTile.width *= resolutionDivider; // total hack
+	workingTile.height *= resolutionDivider;
 	g->pop();
 
-	r2::Tile* drawingTile = kV->rd.getDrawingTile();
-	drawingTile->width *= resolutionDivider; // total hack
-	drawingTile->height *= resolutionDivider;
-	return drawingTile;
+	return kV->rd.getDrawingTile();
 }
 
 #undef SUPER

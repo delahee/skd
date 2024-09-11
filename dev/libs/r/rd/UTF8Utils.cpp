@@ -61,10 +61,8 @@ namespace rd {
 		return (_Code & l_Mask);
 	};
 
-	const UTF8Char * UTF8Utils::Advance(const UTF8Char * _Src, uint32_t & _Code)
-	{
-		PASTA_ASSERT(_Src);
-		if (*_Src == 0)
+	const UTF8Char * UTF8Utils::Advance(const UTF8Char * _Src, uint32_t & _Code){
+		if (!_Src || !*_Src)
 		{
 			_Code = 0;
 			return _Src;

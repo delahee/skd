@@ -1,24 +1,23 @@
-#include "Scene.hpp"
-#include "Scene.hpp"
 #include "stdafx.h"
-#include "Scene.hpp"
+
 #include "1-graphics/Graphic.h"
 #include "1-graphics/GraphicContext.h"
 #include "1-graphics/FrameBuffer.h"
 #include "1-graphics/geo_vectors.h"
 #include "1-time/Profiler.h"
 #include "2-application/Application.h"
-#include "../rs/InputEvent.hpp"
 
+#include "Scene.hpp"
+
+#include "../rs/InputEvent.hpp"
 #include "../rs/GfxContext.hpp"
 
 using namespace std;
 using namespace r2;
+using namespace rs;
 using namespace Pasta;
 
-#define SUPER r2::Node
-
-Scene::Scene( r2::Node * parent ) : SUPER(parent){
+Scene::Scene( r2::Node * parent ) : Super(parent){
 	clearColor = r::Color(0, 0, 0, 1);
 	setDepthRange(1 << 15); // -32k; +32k
 	rs::Sys::addEventListener(this);
@@ -27,9 +26,7 @@ Scene::Scene( r2::Node * parent ) : SUPER(parent){
 	tools::ProcessExplorer::registry.push_back(&al);
 #endif
 
-#ifdef _DEBUG
-	name = "Scene#" + to_string(uid);
-#endif
+	setName("r2::Scene");
 }
 
 Scene::~Scene(){
@@ -50,7 +47,7 @@ void r2::Scene::removeEventManagement() {
 void r2::Scene::dispose(){
 	al.dispose();//agents will be released first
 	//cleanup whatever mess is in the final tree
-	SUPER::dispose();
+	Super::dispose();
 }
 
 void r2::Scene::overrideDimensions(float w, float h){
@@ -66,7 +63,7 @@ void Scene::stdMatrix(rs::GfxContext* ctx, int w, int h) {
 	Matrix44 trans = Matrix44::identity;
 	r::Vector3 pos = cameraPos;
 	pos.x = round(pos.x * cameraScale.x) / cameraScale.x;
-	pos.y = round(pos.y * cameraScale.x) / cameraScale.y;
+	pos.y = round(pos.y * cameraScale.y) / cameraScale.y;
 	trans.translate(-pos);
 	Matrix44 sc = Matrix44::identity;
 	sc.setScale(cameraScale);
@@ -78,6 +75,18 @@ void Scene::stdMatrix(rs::GfxContext* ctx, int w, int h) {
 		ctx->loadProjMatrix(projMatrix=Matrix44::ortho(0, w, h, 0, ctx->zMin, ctx->zMax));
 	}
 }
+
+Matrix44 r2::Scene::getCanonicalViewMatrix() const {
+	Matrix44 trans = Matrix44::identity;
+	r::Vector3 pos = cameraPos;
+	pos.x = round(pos.x * cameraScale.x) / cameraScale.x;
+	pos.y = round(pos.y * cameraScale.y) / cameraScale.y;
+	trans.translate(-pos);
+	Matrix44 sc = Matrix44::identity;
+	sc.setScale(cameraScale);
+	return sc * trans * rotationMatrix;
+}
+
 
 void Scene::render( Pasta::Graphic * g ) {
 	if (!visible)
@@ -171,10 +180,6 @@ void Scene::drawInto(rs::GfxContext * _g , r2::Node * node, Pasta::Texture * t, 
 	}
 }
 
-Node * r2::Scene::getByName(const std::string & name){
-	return findByName(name);
-}
-
 void r2::Scene::unregisterInputDependency(r2::Scene* sc) {
 	for (auto iter = deps.begin(); iter != deps.end(); ++iter) {
 		if ((*iter).sc == sc) {
@@ -225,12 +230,12 @@ bool r2::Scene::handleEvent(InputEvent & ev){
 	InputEvent backup = ev;
 	InputEvent evSub = transformEvent(ev);
 
-	if (DEBUG_EVENT) cout << "processing deps befores " << name << "\n";
+	if (DEBUG_EVENT) cout << "processing deps befores " << name.cpp_str() << "\n";
 
 	for (auto & dep : deps) {
 		if (dep.before) {
 			auto sc = dep.sc;
-			std::string & scName = sc->name;//for debug purpose
+			auto & scName = sc->name;//for debug purpose
 			if (evSub.kind == InputEventKind::EIK_Push)
 				int retain = 0;
 			bool handle = sc->handleEvent(evSub);
@@ -254,7 +259,7 @@ bool r2::Scene::handleEvent(InputEvent & ev){
 		if (it == nullptr) //if an interactor deleted another interactor during loop
 			continue;
 
-		if (DEBUG_EVENT) cout << "inspecting " << it->name << "\n";
+		if (DEBUG_EVENT) cout << "inspecting " << it->name.cpp_str() << "\n";
 		
 		//allow all controllers to get key and pad events
 		bool isGeoEvent = ev.isGeometricEvent();
@@ -263,16 +268,17 @@ bool r2::Scene::handleEvent(InputEvent & ev){
 
 			it->handleEvent(ev);
 			continue;
-		}
-		else { //this is a mouse thing
-			Bounds b = it->getBounds(this);
-
+		} else { //this is a mouse thing
 			bool cancel = false;
 
-			if (!b.contains(evSub.relX, evSub.relY)) {
-				cancel = true;
-				if (DEBUG_EVENT) cout << "not concerned" << "\n";
-				continue;
+            if (DEBUG_EVENT) cout << "evSub " << evSub.toString() << " #" << it->uid << "\n";
+
+			if (!it->boundlessInteract) {
+				Bounds b = it->getBounds(this);
+				if (!b.contains(evSub.relX, evSub.relY)) {
+					cancel = true;
+					if (DEBUG_EVENT) cout << "out of bound" << "\n";
+				}
 			}
 
 			if (!computeNodeVisibility(it)) {//not visible
@@ -281,7 +287,8 @@ bool r2::Scene::handleEvent(InputEvent & ev){
 				cancel = true;
 			}
 
-			if (DEBUG_EVENT) cout << "we have a client,node in area of interest" << "\n";
+			if (DEBUG_EVENT) 
+				cout << "we have a client,node in area of interest" << "\n";
 
 			Vector2 r = it->globalToLocal(Vector2(evSub.relX, evSub.relY));
 			ev.relX = r.x;
@@ -295,12 +302,15 @@ bool r2::Scene::handleEvent(InputEvent & ev){
 			if (cancel) {
 				if (it == getCurrentOver())//checkout if we matter
 					setCurrentOver(nullptr);
+				if (DEBUG_EVENT) cout << "cancelled" << "\n";
 				continue;
 			}
 
+			if (DEBUG_EVENT) cout << "it handling " << ev.toString() << " #" << it->uid << "\n";
+
 			it->handleEvent(ev);
 
-			if (DEBUG_EVENT) cout << "ev state " << ev.toString() << "\n";
+			if (DEBUG_EVENT) cout << "ev state " << ev.toString() << " #" <<it->uid << "\n";
 
 			handled = true;
 
@@ -388,6 +398,10 @@ void r2::Scene::addEventTarget(r2::Interact * inter){
 }
 
 void r2::Scene::removeEventTarget(r2::Interact * inter){
+
+	if (currentOver == inter) currentOver = 0;
+	if (currentFocus== inter) currentFocus = 0;
+
 	auto pos = std::find(interacts.begin(), interacts.end(), inter);
 	if (pos == interacts.end()) return; // already removed
 
@@ -398,7 +412,8 @@ void r2::Scene::removeEventTarget(r2::Interact * inter){
 	*tpos = nullptr;
 }
 
-void r2::Scene::setCurrentFocus(r2::Interact * inter, bool triggerCbk) { 
+void r2::Scene::setCurrentFocus(r2::Interact * inter) { 
+	bool triggerCbk = true;
 	if (currentFocus && currentFocus != inter && triggerCbk) {
 		InputEvent ev(InputEventKind::EIK_FocusLost, -1, -1);
 		currentFocus->handleEvent(ev);
@@ -412,7 +427,25 @@ void r2::Scene::setCurrentFocus(r2::Interact * inter, bool triggerCbk) {
 	}
 }
 
-void r2::Scene::setCurrentOver(r2::Interact * inter, bool triggerCbk) {
+void r2::Scene::setCurrentFocus(r2::Interact* inter, const InputEvent& src){
+	bool triggerCbk = true;
+	if (currentFocus && currentFocus != inter && triggerCbk) {
+		InputEvent ev(InputEventKind::EIK_FocusLost, -1, -1);
+		ev.origin = src.origin;
+		currentFocus->handleEvent(ev);
+	}
+
+	currentFocus = inter;
+
+	if (currentFocus && triggerCbk) {
+		InputEvent ev(InputEventKind::EIK_Focus, -1, -1);
+		ev.origin = src.origin;
+		currentFocus->handleEvent(ev);
+	}
+}
+
+void r2::Scene::setCurrentOver(r2::Interact * inter) {
+	bool triggerCbk = true;
 	if (currentOver && (currentOver != inter) && triggerCbk) {
 		InputEvent ev(InputEventKind::EIK_Out, -1, -1);
 		currentOver->handleEvent(ev);
@@ -556,7 +589,7 @@ double r2::Scene::getValue(rs::TVar valType) {
 		return cameraScale.z;
 		break;
 	default:
-		return SUPER::getValue(valType);
+		return Super::getValue(valType);
 		break;
 	}
 }
@@ -582,17 +615,16 @@ double r2::Scene::setValue(rs::TVar valType, double val) {
 		return cameraScale.z = val;
 		break;
 	default:
-		return SUPER::setValue(valType,val);
+		return Super::setValue(valType,val);
 		break;
 	}
 }
 
 //void Scene::onResize(const Vector2& ns) {
-//	SUPER::onResize(ns);
+//	Super::onResize(ns);
 	//should apply those in user space code, not applying this can be intentionnal
 	//if (areDimensionsOverriden) {
 	//	sceneWidth = ns.x;
 	//	sceneHeight = ns.y;
 	//}
 //}
-#undef SUPER

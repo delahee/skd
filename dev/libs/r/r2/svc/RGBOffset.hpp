@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector> 
-#include "r/Types.hpp"
 #include "r2/Filter.hpp"
 #include "r2/svc/Capture.hpp"
 

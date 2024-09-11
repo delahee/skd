@@ -6,7 +6,7 @@ using namespace r2;
 #define PARENT r2::Node
 StaticBox::StaticBox(const r2::Bounds & b, r2::Node* p) : PARENT(p) {
 	bnd = b;
-	name = "StaticBox#" + std::to_string(uid);
+	setName("StaticBox");
 }
 
 StaticBox::~StaticBox() {

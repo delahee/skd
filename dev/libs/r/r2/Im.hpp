@@ -3,7 +3,15 @@
 #include <string>
 #include <optional>
 
-namespace rd { class TileLib; }
+namespace r2 { class Tile; class Bitmap; }
+namespace rd {
+	class TileLib; 
+}
+
+namespace ri18n {
+	struct AstNode;
+	class Nar;
+}
 
 namespace r2 {
 
@@ -30,6 +38,8 @@ namespace r2 {
 	
 	class Im {
 		public:
+			static bool				INCLUDE_CAMERA_SCALE;
+
 			static r2::Bitmap*		bmp(r2::Tile* tile, r2::Node* parent);
 			static r2::Bitmap*		bmp(rd::TileLib * lib, const char * group, r2::Node* parent);
 			static r2::Text*		text( const std::string & txt, r2::Node* parent );
@@ -40,6 +50,7 @@ namespace r2 {
 
 			static r2::Graphics *	cross( const r::Vector2 & pos, float radius, r2::Node* parent);
 			static r2::Graphics *	cross( const r::Vector2 & pos, float radius, float thicc, r2::Node* parent);
+			static r2::Graphics *	arrow(const r::Vector2 & from, const r::Vector2 & to, r2::Node* parent);
 			static r2::Graphics *	line(const r::Vector2 & from, const r::Vector2 & to, r2::Node* parent);
 			static r2::Graphics *	line(const r::Vector2 & from, const r::Vector2 & to, float thicc, r2::Node* parent);
 
@@ -70,20 +81,33 @@ namespace r2 {
 			static void				imNodeListEntry(const char * label, Node * e);
 			static void				imElemEntry(const char * label, r2::BatchElem * be);
 			static inline void		imNodeListEntry(const std::string& label, Node* e) { imNodeListEntry(label.c_str(), e); };
-			static bool				imLibName(std::string& lib);
-			static bool				imTileName(std::string& tile,const char * lib);
+
+			static bool				imTags(rd::Vars &v);
 			static bool				imTags(std::string& tags);
+			//not tested enough
+			static bool				imTags(Str& tags);
+			static bool				imDir4(rd::Dir & dir);
+			static bool				imDir4orNone(rd::Dir& dir);
+			static bool				imTags(const char * label,std::vector<Str> & tags);
+			static bool				imTags(const char * label,eastl::vector<Str> & tags);
+			static bool				imTagsReadOnly(const char* tags);
+
 			static bool				imTagsReadOnly(const std::string& tags);
-			static bool				imSFX(std::string& sfx);
 			static bool				imBlendmode(r::TransparencyType & t);
 			static bool				imTextureData(Pasta::TextureData * data);
 
 			static void				previewPixels(Pasta::TextureData* data, int size);
-
 			static void				previewPixels(int w, int h, const r::u8 * data, int size);
+
+			static void				nodeButton(r2::Node* n, const char *prefix = 0);
+			static void				beButton(r2::BatchElem* n, const char *prefix = 0);
+
+			static void				imNar(ri18n::AstNode * ast);
 
 			static void				keepAlive(r2::Node&n);
 			static void				keepAlive(r2::BatchElem&be);
+
+			static bool				filePicker(const char * prefix,Str& f);
 
 			//will be sent back to pools at end of frame
 			static eastl::vector<r2::Node*>			depletedNodes;
@@ -91,7 +115,7 @@ namespace r2 {
 
 			static const char*		blends[r::TransparencyType::TRANSPARENCY_TYPE_COUNT];
 			static const char*		filters[(u32)r2::FilterType::FT_COUNT];
-			static const char*		modeMatrix[(u32)r2::ColorMatrixMode::CMM_Count];
+			static const char*		modeMatrix[(int)r2::ColorMatrixMode::Count];
 			static const char*		texFilters[r2::TexFilter::TF_Count];
 
 			
@@ -136,11 +160,14 @@ namespace ImGui {
 	bool InputText(const char* label, std::string & str, ImGuiInputTextFlags flags = 0);
 	bool InputText(const char* label, Str & str, ImGuiInputTextFlags flags = 0);
 	bool InputTextMultiline(const char* label, std::string & str, const ImVec2& size = ImVec2(0, 0));
+	bool InputTextMultiline(const char* label, Str & str, const ImVec2& size = ImVec2(0, 0));
 	bool Button( const std::string & label);
+	bool Button( const Str & label);
 	bool Matrix(const char* label, r::Matrix44 & mat);
 
 	bool DragDouble	(const char* label,	double * val, double vspeed=0.1, double vmin=0.0, double vmax=1000.0, const char* format = NULL);
 	bool DragDouble2(const char* label, double * val, double vspeed=0.1, double vmin=0.0, double vmax=1000.0, const char* format = NULL);
+	bool DragDouble3(const char* label, double * val, double vspeed=0.1, double vmin=0.0, double vmax=1000.0, const char* format = NULL);
 	bool DragDouble4(const char* label, double * val, double vspeed=0.1, double vmin=0.0, double vmax=1000.0, const char* format = NULL);
 
 	inline bool DragDouble(const std::string& label, double* val, double vspeed = 0.1, double vmin = 0.0, double vmax = 1000.0, const char* format = NULL) {
@@ -163,11 +190,16 @@ namespace ImGui {
 
 	void TextHint(const char * label, r::Color col, const char * tip);
 
+	void Hint(const char* tip);
+	inline void Hint(const std::string& str) { Hint(str.c_str()); };
+	inline void Hint(const Str& tip) { return Hint(tip.c_str()); };
 	void Warning(const char* tip);
 	void Warning(const std::string& tip);
+	inline void Warning(const Str& tip) { return Warning(tip.c_str()); };
 
 	void Error(const char * tip);
 	void Error(const std::string & tip);
+	void Error(const Str & tip);
 	
 	void Value(const char* prefix, double val);
 	void Value(const char* prefix, r::u64 id);
@@ -175,7 +207,19 @@ namespace ImGui {
 	void Value(const char* prefix, const std::string & str);
 	void Value(const char* prefix, const r2::Bounds &obj);
 	void Value(const char* prefix, const Vector2i &v);
+	void Value(const char* prefix, const Vector3i &v);
+	void Value(const char* prefix, const Vector4i &v);
+	void Value(const char* prefix, const std::vector<int> &v);
+	void Value(const char* prefix, const std::vector<Str>& v); 
+	void Value(const char* prefix, const std::vector<std::string>& v); 
+	void Value(const char* prefix, const eastl::vector<int>& v);
+	void Value(const char* prefix, const eastl::vector<Str>& v);
+	void Value(const char* prefix, const eastl::vector<double>& v);
+	void Value(const char* prefix, const eastl::vector<float>& v);
 	
+	bool EditAngle(const char* label, r::opt<float>& val, float dflt = 90.0f);
+	bool Edit(const char* label, r::opt<float>& val, float dflt = 0.0f);
+	bool Edit(const char* label, r::opt<double>& val, double dflt = 0.0);
 	
 	inline bool ColorEdit4(const char* prefix, r::Color& c, ImGuiColorEditFlags fl=0){
 		return ColorEdit4(prefix, c.ptr(), fl);
@@ -184,12 +228,28 @@ namespace ImGui {
 	inline bool ColorEdit3(const char* prefix, r::Color& c, ImGuiColorEditFlags fl=0) {
 		return ColorEdit3(prefix, c.ptr(), fl);
 	}
+	
+	inline void PushID(const Str& id) {
+		ImGui::PushID(id.c_str());
+	};
+
+	inline void PushID(const std::string & id) {
+		ImGui::PushID(id.c_str());
+	};
 
 	bool TreeNode(const std::string & txt);
 	bool TreeNode(const Str & txt);
 	
-	std::optional<std::pair<std::string,std::string>> AudioPicker(bool edit = true);
+	std::optional<rd::EventRef>								AudioPickerRef(bool edit = true);
+	// bank, event
+	std::optional<std::pair<std::string,std::string>>		AudioPicker(bool edit = true);
+
+	//todo finish this
+	//std::optional<rd::EventRef>							AudioPicker(bool edit = true);
+
 	//cuz sol thing
 	//void LabelText(const char * fmt, const std::string & str);
 	
+	void Button(const char * label, r2::Node* n);
+	bool Combo(const char* name, qbool & b);
 }

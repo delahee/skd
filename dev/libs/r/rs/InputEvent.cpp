@@ -32,7 +32,9 @@ std::string rs::InputEvent::toString() {
 	return kindToString(kind) + "[" + std::to_string(std::rint(relX)) + "," + std::to_string(std::rint(relY)) + "]";
 }
 
-rs::InputEvent::~InputEvent() {}
+rs::InputEvent::~InputEvent() {
+
+}
 
 rs::InputEvent::InputEvent(const InputEvent & elem) : InputEvent(elem.kind, elem.relX, elem.relY) {
 	stopPropagation = elem.stopPropagation;
@@ -43,6 +45,7 @@ rs::InputEvent::InputEvent(const InputEvent & elem) : InputEvent(elem.kind, elem
 	charCode = elem.charCode;
 	duration = elem.duration;
 	native = elem.native;
+	origin = elem.origin;
 }
 
 bool rs::InputEvent::isGeometricEvent() {
@@ -57,4 +60,15 @@ bool rs::InputEvent::isGeometricEvent() {
 	case InputEventKind::EIK_Focus:
 	case InputEventKind::EIK_FocusLost: return true;
 	};
+}
+
+InputOrigin rs::InputEvent::resolveOrigin(Pasta::ControllerType ct){
+	switch (ct) {
+		case Pasta::ControllerType::CT_KEYBOARD:
+			return InputOrigin::Keyboard;
+		case Pasta::ControllerType::CT_MOUSE:
+			return InputOrigin::Mouse;
+		default:
+			return InputOrigin::Pad;
+	}
 }

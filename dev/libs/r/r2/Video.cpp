@@ -15,6 +15,7 @@ r2::Video::Video(Node * parent) : SUPER(parent) {
 
 	decoder = h264bsdAlloc();
 	h264bsdInit(decoder, 0);
+	setName("r2::Video");
 }
 
 Video* r2::Video::fromVideoFile(const std::string& path, r2::Node* parent) {
@@ -142,7 +143,7 @@ void r2::Video::releaseTile(){
 			tile->disposeTexture();
 
 		if ( tile->isPooled() ) {
-			rd::Pools::tiles.free(tile);
+			rd::Pools::tiles.release(tile);
 			tile = nullptr;
 		}
 		else {

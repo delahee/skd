@@ -14,7 +14,7 @@ subject to the following restrictions:
 */
 
 ///This file was created by Alex Silverman
-
+#pragma once
 #ifndef BT_MULTIMATERIAL_TRIANGLE_INDEX_VERTEX_ARRAY_H
 #define BT_MULTIMATERIAL_TRIANGLE_INDEX_VERTEX_ARRAY_H
 

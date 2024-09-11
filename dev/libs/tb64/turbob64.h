@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     - twitter  : https://twitter.com/powturbo
     - email    : powturbo [_AT_] gmail [_DOT_] com
 **/
+#pragma once
 #ifndef _TURBOB64_H_
 #define _TURBOB64_H_
 #ifdef __cplusplus

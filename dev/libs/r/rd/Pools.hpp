@@ -11,15 +11,38 @@
 #include "r2/Graphics.hpp"
 #include "4-menus/imgui.h"
 
+
+
+
 namespace rd{
+	extern template class rs::Pool<TileAnim>;
+	extern template class rs::Pool<r2::Tile>;
+	extern template class rs::Pool<rd::ABatchElem>;
+	extern template class rs::Pool<rd::ABitmap>;
+	extern template class rs::Pool<rd::SubBatchElem>;
+	extern template class rs::Pool<rd::SubABatchElem>;
+	extern template class rs::Pool<r2::Bitmap>;
+	extern template class rs::Pool<r2::Node>;
+	extern template class rs::Pool<r2::Text>;
+	extern template class rs::Pool<r2::Graphics>;
+	extern template class rs::Pool<r2::Batch>;
+	extern template class rs::Pool<rd::StaticBatch>;
+	extern template class rs::Pool<Pasta::ShadedTexture>;
+	extern template class rs::Pool<r2::BatchElem>;
+	extern template class rs::Pool<rd::AnonAgent>;
+	extern template class rs::Pool<r2::Interact>;
+	extern template class rs::Pool<rd::Anon>;
+
 class Pools {
 public:
+	
+
 	static rs::Pool<TileAnim>				anims;
 	static rs::Pool<r2::Tile>				tiles;
-
 	static rs::Pool<rd::ABatchElem>			aelems;
 	static rs::Pool<rd::ABitmap>			abitmaps;
 	static rs::Pool<rd::SubBatchElem>		subelems;
+	static rs::Pool<rd::SubABatchElem>		subaelems;
 	static rs::Pool<r2::Bitmap>				bitmaps;
 	static rs::Pool<r2::Node>				nodes;
 	static rs::Pool<r2::Text>				texts;
@@ -30,11 +53,12 @@ public:
 	static rs::Pool<r2::BatchElem>			elems;
 	static rs::Pool<rd::AnonAgent>			aa;
 	static rs::Pool<r2::Interact>			interacts;
+	static rs::Pool<rd::Anon>				anons;
 	
 	//dispatching free
-	static void free(r2::BatchElem* nodes);
-	static void free(r2::Node* nodes);
-	static void free(rd::AnonAgent* ag);
+	static void release(r2::BatchElem* nodes);
+	static void release(r2::Node* nodes);
+	static void release(rd::AnonAgent* ag);
 	static void safeFree(r2::Node* nodes);
 	
 	static Pasta::ShadedTexture*		allocForFrame();
@@ -54,7 +78,7 @@ public:
 		return getText(txt.c_str(), fnt, fontSize, col, parent);
 	};
 
-	static eastl::vector<Pasta::ShadedTexture*> deleteList;
+	static eastl::vector<Pasta::ShadedTexture*>		deleteList;
 	static eastl::vector<void*>						rawFreeList;
 };
 }

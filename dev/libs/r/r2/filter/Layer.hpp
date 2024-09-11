@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../Filter.hpp"
-#include <memory>
+
 /***
 * this is means for static copies refreshing once in a while 
 * it is freezed by default
@@ -12,10 +12,9 @@ namespace r2 {
 	namespace filter {
 		class Layer : public Filter {
 		public:
-			Layer();
-			virtual ~Layer();
-
-			virtual void im() override;
+									Layer();
+			virtual					~Layer();
+			virtual bool			shouldForceAlpha() override { return true; };
 		};
 	}
 }

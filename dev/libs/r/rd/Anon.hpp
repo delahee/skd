@@ -1,16 +1,18 @@
 #pragma once
 
-
 #include <string>
 #include <vector>
 #include <functional>
 #include "r/Types.hpp"
+
 namespace r2 {
 	class Node;
 	class BatchElem;
 }
 namespace rd {
-	enum class AType : u32 {
+
+	//add new values at the end
+	enum class AType : int {
 		AVoid,
 		AFloat,
 		AInt,
@@ -24,9 +26,12 @@ namespace rd {
 		AInt64,
 		AUInt64,
 		ADouble,
+
+		ASharedPtr,
 	};
 
-	enum class ATypeEx : u32 {
+	//add new values at the end
+	enum class ATypeEx : int {
 		AExVoid,
 		
 		AMat44,
@@ -43,12 +48,13 @@ namespace rd {
 		AVec3Array,
 
 		ABool,
+		AAgentPtr,
 	};
 
-	enum AFlags : u32 {
+	enum AFlags : int {
 		AFL_OWNS_DATA = 1 << 0,
-
-		AFL_IMGUI_CHANGING_COLOR = 1<<16,
+		AFL_IMGUI_CHANGING_COLOR = 1<<1,
+		AFL_POOLED = 1<<2,
 	};
 
 	//todo optimize me : pad at least 128 bits to pack float colors
@@ -58,20 +64,22 @@ namespace rd {
 										Anon(Anon&&val);
 										~Anon();
 
-		std::string						name;
-
+		int								flags				= 0;
 		rd::AType						type				= rd::AType::AVoid;
 		rd::ATypeEx						typeEx				= rd::ATypeEx::AExVoid;
 
-		rd::Anon*						sibling				= nullptr;
-		rd::Anon*						child				= nullptr;
+		int								byteSize			= 0;//avoid unsigned as overflow will create more error than what it tries to solve
 
-		void*							data				= nullptr;
+		void* data = nullptr;
 #ifdef ENVIRONMENT32 //we need 64bit of storage
-		int								_pad				= 0;
+		int								_pad = 0;
 #endif
 
-		bool							hasValue() { return type != AType::AVoid; }
+		rd::Anon*						sibling				= nullptr;
+		rd::Anon*						child				= nullptr;
+		std::string						name;
+
+		bool							hasValue() const { return type != AType::AVoid; }
 
 		bool&							asBool();
 		float&							asFloat();
@@ -81,6 +89,7 @@ namespace rd {
 		std::vector<float>				getFloatBufferCopy()	;
 		char*							asString()				;
 		Str								asStr()					;
+		StrRef							asStrRef()				;
 		std::string						asStdString()			;
 		void *							asPtr();
 		r2::Node*						asNodePtr();
@@ -112,7 +121,10 @@ namespace rd {
 		rd::Anon*						mkString(const char * str);
 		rd::Anon*						mkString(const std::string & v);
 		rd::Anon*						mkPtr(void * ptr);
+
+
 		rd::Anon*						mkNodePtr(r2::Node * ptr);
+		rd::Anon*						mkAgentPtr(rd::Agent * ptr);
 		rd::Anon*						mkBatchElemPtr(r2::BatchElem * ptr);
 		rd::Anon*						mkInt64(int64_t v);
 		rd::Anon*						mkUInt64(uint64_t v);
@@ -143,6 +155,7 @@ namespace rd {
 		bool							isBool() { return type == AType::AInt && typeEx == ATypeEx::ABool; };
 		bool							isInt() { return type == AType::AInt; };
 		bool							isFloat() { return type == AType::AFloat; };
+		bool							isString() { return type == AType::AString; };
 		rd::Anon*						clone( bool recursive = true ) const;
 
 		bool							im(rd::Anon*& selfref);
@@ -158,10 +171,27 @@ namespace rd {
 		std::string						toString() const;
 		std::string						getValueAsString();
 
+		void							dispose();
 		rd::Anon*						destroy();
 		rd::Anon*						destroyByName(const char * name);
 
 		int								getMemorySize();
+
+		static rd::Anon*				fromPool(const char * name = 0);
+
+		/*
+		template<typename T>
+		rd::Anon* mkSharedPtr(std::shared_ptr<T> ptr) {
+			freeData();
+			reserve(byteSize = sizeof(ptr));
+			type = rd::AType::ASharedPtr;
+
+			auto ref = (std::shared_ptr<T> *) &data;
+			*ref = ptr;
+
+			return this;
+		};
+		*/
 	public:
 		static void						unitTest();
 
@@ -170,10 +200,9 @@ namespace rd {
 		
 	public:
 		void							operator=(const Anon& rhs);
-
+		bool							operator==(const Anon& rhs)const;
+		bool							operator!=(const Anon& rhs)const { return !(*this == rhs); };
 	protected:
-		int								byteSize = 0;
-		int								flags = 0;
 		void							freeData();
 	};
 };

@@ -4,8 +4,6 @@
 #include "Interact.hpp"
 #include "rd/FontManager.hpp"
 
-#include <string>
-
 namespace r2 {
 	class Scissor;
 

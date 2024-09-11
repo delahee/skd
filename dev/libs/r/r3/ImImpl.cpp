@@ -3,6 +3,7 @@
 #include "4-menus/imgui.h"
 #include "r3/Node3D.hpp"
 #include "r3/Scene3D.hpp"
+#include "r3/r3Im.hpp"
 
 using namespace r3;
 
@@ -44,6 +45,7 @@ void Scene3D::im() {
 	}
 
 	vars.im();
+	Super::im();
 }
 
 void Node3D::im() {

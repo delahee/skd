@@ -1,17 +1,15 @@
 #pragma once
 
-#include <vector>
-#include <functional>
-#include <any>
-
 namespace rd {
 	struct SignalHandler {
-		std::function<void(void)> function;
+		Str							name;
+		std::function<void(void)>	function;
 
 		SignalHandler(std::function<void(void)>& f);
 	};
 
 	struct Sig {
+		Str										name;
 		std::any								anyData = nullptr;
 		void* ptrData = nullptr;
 		std::vector<rd::SignalHandler*>			signals;
@@ -46,13 +44,15 @@ namespace rd {
 
 	template <typename Ty>
 	struct MsgChan  {
+		typedef std::function<void(Ty)> Func;
 		struct MsgChanHandler {
-			std::function<void(Ty)> function;
+			Str						name;
+			Func function;
 
 			MsgChanHandler() {
 
 			};
-			MsgChanHandler(std::function<void(Ty)> f) {
+			MsgChanHandler(Func f) {
 				function = f;
 			};
 		};
@@ -70,7 +70,7 @@ namespace rd {
 			signalsOnce.clear();
 		}
 
-		MsgChanHandler* add(std::function<void(Ty)> f, MsgChanHandler * _sig = nullptr) {
+		MsgChanHandler* add(Func f, MsgChanHandler * _sig = nullptr) {
 			MsgChanHandler* sig = nullptr;
 			if (_sig) {
 				sig = _sig;
@@ -82,13 +82,57 @@ namespace rd {
 			return sig;
 		};
 
-		MsgChanHandler* addOnce(std::function<void(Ty)> f) {
+		inline int			size() {
+			return signals.size() + signalsOnce.size();
+		};
+
+		auto add(const char * name, Func f) {
+			MsgChanHandler* sig = new MsgChanHandler(f);
+			sig->name = name;
+			signals.push_back(sig);
+			return sig;
+		};
+
+		inline void operator+=(Func f) {
+			add(f);
+		};
+
+		auto addOnce(std::function<void(Ty)> f) {
 			MsgChanHandler* sig = new MsgChanHandler(f);
 			signalsOnce.push_back(sig);
 			return sig;
 		};
 
-		void remove(MsgChanHandler*handler) {
+		auto addOnce(const char * name, Func f) {
+			MsgChanHandler* sig = new MsgChanHandler(f);
+			sig->name = name;
+			signalsOnce.push_back(sig);
+			return sig;
+		};
+
+		inline void removeByName(const char* handlerName) {
+			StrRef ref(handlerName);
+			for (auto iter = signals.begin(); iter != signals.end(); ) {
+				MsgChanHandler* s = *iter;
+				if ( s->name == ref){
+					iter = signals.erase(iter);
+					break;
+				}
+				else
+					iter++;
+			}
+			for (auto iter = signalsOnce.begin(); iter != signalsOnce.end(); ) {
+				MsgChanHandler* s = *iter;
+				if (s->name == ref) {
+					iter = signalsOnce.erase(iter);
+					break;
+				}
+				else
+					iter++;
+			}
+		};
+
+		inline void remove(MsgChanHandler*handler) {
 			auto idx = std::find(signals.begin(), signals.end(), handler);
 			if (idx != signals.end()) {
 				signals.erase(idx);
@@ -127,12 +171,13 @@ namespace rd {
 		};
 	};
 
-	typedef MsgChan<float>			MsgChanF;
-	typedef MsgChan<int>			MsgChanI;
-	typedef MsgChan<bool>			MsgChanB;
-	typedef MsgChan<std::string>	MsgChanStdStr;
-	typedef MsgChan<const char *>	MsgChanCStr;
-	typedef MsgChan<Str>			MsgChanStr;
+	typedef MsgChan<float>				MsgChanF;
+	typedef MsgChan<int>				MsgChanI;
+	typedef MsgChan<bool>				MsgChanB;
+	typedef MsgChan<std::string>		MsgChanStdStr;
+	typedef MsgChan<const char *>		MsgChanCStr;
+	typedef MsgChan<Str>				MsgChanStr;
+	typedef MsgChan<const r::Vector2&>	MsgChanVec2;
 }
 
 

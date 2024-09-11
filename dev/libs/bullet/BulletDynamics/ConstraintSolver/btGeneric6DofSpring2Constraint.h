@@ -36,7 +36,7 @@ btGeneric6DofConstraint Refactored by Francisco Le?n
 email: projectileman@yahoo.com
 http://gimpact.sf.net
 */
-
+#pragma once
 #ifndef BT_GENERIC_6DOF_CONSTRAINT2_H
 #define BT_GENERIC_6DOF_CONSTRAINT2_H
 

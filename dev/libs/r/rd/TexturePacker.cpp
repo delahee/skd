@@ -57,11 +57,10 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & path, const std::str
 	TPConf conf;
 	if (_conf)
 		conf = *_conf;
-	conf.treatFoldersAsPrefixes = false;
 	return parseXmlAndLoad(path, imgPath,conf);
 }
 
-TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::string & imgPath, const TPConf & conf) {
+TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::string & _imgPath, const TPConf & conf) {
 	vector<pair<string, string>> pages;
 	
 	const char* tag = "0.xml";
@@ -70,11 +69,48 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 
 	bool isMultiPage = false;
 
-	if (rd::String::endsWith(_path, "0.xml")) {
-		isMultiPage = true;
+	auto exist = [](const auto& s) { return FileMgr::getSingleton()->exists(s); };
+	std::string path = _path;
+	std::string imgPath = _imgPath;
+
+	//try discover multi page
+	{
+		std::string cvts = FileMgr::getSingleton()->convertResourcePath(path);
+		if (!exist(cvts)) {
+			auto np0 = rd::String::replace(cvts, ".xml", "0.xml");
+			if (exist(np0)) {
+				path = String::replace(path, ".xml", "0.xml");
+				imgPath = String::replace(path, ".xml", ".png");
+			}
+			else {
+				auto np1 = rd::String::replace(cvts, ".xml", "1.xml");
+				if (exist(np1)) {
+					path = String::replace(path, ".xml", "1.xml");
+					imgPath = String::replace(path, ".xml", ".png");
+				}
+				else {
+					auto npDash0 = rd::String::replace(cvts, ".xml", "-0.xml");
+					if (exist(npDash0)) {
+						path = String::replace(path, ".xml", "-0.xml");
+						imgPath = String::replace(path, ".xml", ".png");
+					}
+					else {
+						auto npDash1 = rd::String::replace(cvts, ".xml", "-1.xml");
+						if (exist(npDash1)) {
+							path = String::replace(path, ".xml", "-1.xml");
+							imgPath = String::replace(path, ".xml", ".png");
+						}
+					}
+				}
+			}
+		}
 	}
 
-	if (rd::String::endsWith(_path, "1.xml")) {
+	//process multi page
+	if (rd::String::endsWith(path, "0.xml"))	
+		isMultiPage = true;
+	else 
+	if (rd::String::endsWith(path, "1.xml")) {
 		tag = "1.xml";
 		imgTag = "1.png";
 		isMultiPage = true;
@@ -86,7 +122,7 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 		for (;;){
 			int pageNum = first_tag + curPage;
 
-			string nPath = rd::String::replace(_path, tag, 
+			string nPath = rd::String::replace(path, tag, 
 				to_string(pageNum) + ".xml");
 
 			string texPath = rd::String::replace(imgPath, imgTag,
@@ -102,10 +138,10 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 		}
 	}
 	else
-		pages.push_back(pair(FileMgr::getSingleton()->convertResourcePath(_path), imgPath));
+		pages.push_back(pair(FileMgr::getSingleton()->convertResourcePath(path), imgPath));
 
 	TileLib* lib = new TileLib();
-	lib->name = _path;
+	lib->name = _path;//keep original one
 
 	unordered_map<std::string, int> slices;
 	unordered_map<std::string, vector<int>> anims;
@@ -120,9 +156,13 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 
 		lib->loadImage(imgPath, conf.filter,conf.keepTextureData);
 		
+		if (lib->textures.size() == 0) {
+			traceError("Cannot load textures for "s + imgPath+ " maybe you forget to hing for multi pages?");
+			return lib;
+		}
+
 		//scan for smart update tag that may be used to update tile definitions
-		for (const TiXmlNode* node = doc.FirstChild(); node; node = node->NextSibling())
-		{
+		for (const TiXmlNode* node = doc.FirstChild(); node; node = node->NextSibling()){
 			const TiXmlComment* com = dynamic_cast<const TiXmlComment*>(node);;
 			if (com) {
 				const char* val = com->Value();
@@ -133,24 +173,18 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 			}
 		}
 		TiXmlElement* root = doc.RootElement();
-
 		if (root->ValueTStr() != "TextureAtlas") 
 			continue;
 
-		int width = 0;
-		root->QueryIntAttribute("width", &width);
-		int height = 0;
-		root->Attribute("height", &height);
+		int width = 0; root->Attribute("width", &width);
+		int height = 0; root->Attribute("height", &height);
+
 		TiXmlElement* cur = (TiXmlElement*)root->FirstChild("SubTexture");
-		while (cur != nullptr)
-		{
+		while (cur != nullptr) {
 			TPSlice sl;
 			const char * subName = cur->Attribute("name");
-			sl.name = cur->Attribute("name");
+			sl.name = subName;
 
-			if (sl.name == "elevator/elevatorBigBattery") {
-				int po = 0;
-			}
 			cur->QueryIntAttribute("x", &sl.x);
 			cur->QueryIntAttribute("y", &sl.y);
 			cur->QueryIntAttribute("width", &sl.width);
@@ -167,12 +201,15 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 			if (ext)
 				sl.name = sl.name.substr(0, sl.name.find("."));
 
+			if (rd::String::contains(sl.name, "shop/shop_shopKeeper"))
+				int here = 0;
+
 			if (strstr(sl.name.c_str(), "/")) {
-				if (conf.treatFoldersAsPrefixes) 
-					std::replace(sl.name.begin(), sl.name.end(), '/', '_');
-				
-				else 
-					sl.name = sl.name.substr(sl.name.rfind("/")+1);
+				switch(conf.folderPolicy){
+					case TPConf::FP_KEEP_AND_ALIAS: break;
+					case TPConf::FP_AS_OPT_PREFIX: sl.name = sl.name.substr(sl.name.rfind("/") + 1); break;
+					case TPConf::FP_CRUSH: std::replace(sl.name.begin(), sl.name.end(), '/', '_');
+				}
 			}
 
 			//let's remove tailing number
@@ -188,10 +225,8 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 				lib->sliceCustom(subName, 0, sl.x, sl.y, sl.width, sl.height, rf);
 
 			lib->sliceCustom(sl.name, sl.frame, sl.x, sl.y, sl.width, sl.height, rf);
-
-			if( rd::String::endsWith(sl.name,"_")){
+			if( rd::String::endsWith(sl.name,"_"))
 				lib->sliceCustom(sl.name.substr(0,sl.name.length()-1), sl.frame, sl.x, sl.y, sl.width, sl.height, rf);
-			}
 
 			if (anims.find(sl.name) == anims.end()) {
 				vector<int> v;
@@ -207,7 +242,12 @@ TileLib* TexturePacker::parseXmlAndLoad(const std::string & _path, const std::st
 	for (auto it = anims.begin(); it != anims.end(); it++) {
 		auto& vec = (*it).second;
 		sort(vec.begin(), vec.end());
-		lib->defineAnim((*it).first, (*it).second);
+		lib->defineAnim(it->first, (*it).second);
+		bool hasSlash = rd::String::contains(it->first, '/');
+		if (hasSlash && (conf.folderPolicy == TPConf::FP_KEEP_AND_ALIAS)) {
+			const char* ng = strchr(it->first.c_str(), '/') + 1;
+			lib->aliasGroup(ng, it->first.c_str());
+		}
 	}
 	return lib;
 }

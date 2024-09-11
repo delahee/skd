@@ -1,23 +1,21 @@
 #include "stdafx.h"
-
-#include <iostream>
-
 #include "rs/Std.hpp"
-#include "../r2/BatchElem.hpp"
-
-#include "RichText.hpp"
+#include "r2/BatchElem.hpp"
 #include "r2/im/TilePicker.hpp"
+#include "rd/JSerialize.hpp"
+#include "RichText.hpp"
+#include "T.hpp"
+#include "Nar.hpp"
 
 using namespace std;
 using namespace r2;
 using namespace rd;
 using namespace ri18n;
 
-#define SUPER r2::Text
-
 static r2::Outline strongOutline;
-static std::vector<r2::Outline*> saveOutline;
-static std::vector<r::Color> saveColor;
+static std::vector<r::opt<r2::Outline>> saveOutline;
+static std::vector<r::opt<r::Color>>	saveColor;
+static std::vector<bool>				saveItalic;
 
 static void id_1(const char*) {
 
@@ -52,7 +50,7 @@ void ri18n::RichText::updateStyle(){
 	cache();
 }
 
-ri18n::RichText::RichText(AstNode* _tree, r2::Node* parent ) : SUPER( 0,0,parent){
+ri18n::RichText::RichText(AstNode* _tree, r2::Node* parent ) : Super( 0,0,parent){
 	tree = _tree;
 	onEmStart = [this]() {
 		pushCurrentColor();
@@ -61,14 +59,14 @@ ri18n::RichText::RichText(AstNode* _tree, r2::Node* parent ) : SUPER( 0,0,parent
 	onEmEnd = [this]() {
 		popCurrentColor();
 	};
+
 	onStrongStart = [this]() {
 		pushCurrentColor();
 		forceColor = strongColor;
-
 		pushCurrentOutline();
 		if (strongOutlineColor) {
 			strongOutline.col = *strongOutlineColor;
-			outline = &strongOutline;
+			outline = strongOutline;
 		}
 	};
 
@@ -77,7 +75,7 @@ ri18n::RichText::RichText(AstNode* _tree, r2::Node* parent ) : SUPER( 0,0,parent
 		popCurrentOutline();
 	};
 	onEvent = id_1;
-	onTagStart = std::bind(&ri18n::RichText::stdTagStart, this, std::placeholders::_1);
+	onTagStart = std::bind(&ri18n::RichText::stdTagStart, this, std::placeholders::_1, std::placeholders::_2);
 	onTagEnd = std::bind(&ri18n::RichText::stdTagEnd, this, std::placeholders::_1);
 	onTagFrom = id_1;
 
@@ -99,7 +97,7 @@ ri18n::RichText::RichText(AstNode* _tree, r2::Node* parent ) : SUPER( 0,0,parent
 	onUniqueEvent = [](const char* c) { cout << "onUniqueEvent " << c << endl; };
 	onImportantEvent = [](const char* c) { cout << "onImportantEvent " << c << endl; };
 
-	onTagStart = [](const char* c) { cout << "onTagStart " << c << endl; };
+	onTagStart = [](const char* c,auto node) { cout << "onTagStart " << c << endl; };
 	onTagEnd = [](const char* c) { cout << "onTagEnd " << c << endl; };
 
 	onTagFrom = [](const char* c) { cout << "onTagFrom " << c << endl; };
@@ -121,15 +119,17 @@ RichText::~RichText() {
 }
 
 
-void ri18n::RichText::stdTagStart(const char* t) {
+void ri18n::RichText::stdTagStart(const char* t, AstNode* node) {
 	rd::XmlData data;
 	rd::String::parseXMLTags(t, data);
 	rd::Font* cur = fonts[fonts.size() - 1];
 
 	//WIP
-	if( rs::Std::exists(data.attrs, "class") ){
+	if (rs::Std::exists(data.attrs, "class"))
 		classes.push_back(data.attrs["class"]);
-	}
+
+	if (data.tag == "em") onEmStart();
+	if (data.tag == "strong") onStrongStart();
 
 	if (	data.tag == "action"
 		||	data.tag == "actionPrompt") {
@@ -146,43 +146,90 @@ void ri18n::RichText::stdTagStart(const char* t) {
 
 	if (data.tag == "img") {
 		const char* tileName = 0;
+
 		if( rs::Std::exists( data.attrs ,"tile")) tileName = data.attrs["tile"].c_str();
+		if (rs::Std::exists(data.attrs, "id")) tileName = data.attrs["id"].c_str();
+		if (rs::Std::exists(data.attrs, "grp")) tileName = data.attrs["grp"].c_str();
+
 		if (!tileName) return;
 
 		const char* libName = 0;
 		if (rs::Std::exists(data.attrs, "lib")) libName = data.attrs["lib"].c_str();
 		if (!libName) return;
 
+		bool animated = rs::Std::exists(data.attrs, "animated") && (data.attrs["animated"] == "true");
+
 		float px = 0;
 		float py = 0;
 
 		float ofsX = 0;
 		float ofsY = 0;
+		float paddingLeft = 0;
+		float paddingRight = 0;
 
-		rd::TileLib* lib = 0;
-		if(r2::im::TilePicker::hasLib(libName))
-			lib = r2::im::TilePicker::getLib(libName);
+		bool filter = false;
+
+		rd::TileLib* lib = r2::im::TilePicker::getOrLoadLib(libName);
 		if (!lib) 
 			return;
 
+		if (rs::Std::exists(data.attrs, "filter")) filter = rd::String::parseBool(data.attrs["filter"].c_str());
 		if (rs::Std::exists(data.attrs, "pivotX")) px = atof( data.attrs["pivotX"].c_str());
 		if (rs::Std::exists(data.attrs, "pivotY")) py = atof( data.attrs["pivotY"].c_str());
-		if (rs::Std::exists(data.attrs, "ofsX")) ofsX = atof(data.attrs["ofsX"].c_str());
-		if (rs::Std::exists(data.attrs, "ofsY")) ofsY = atof(data.attrs["ofsY"].c_str());
 
-		BatchElem* le = firstElem();
-		ABatchElem* e = rd::Pools::aelems.alloc();//make it animated by default to avoid future pita
+		if (rs::Std::exists(data.attrs, "ofsX")) ofsX = atof(data.attrs["ofsX"].c_str());
+		if (rs::Std::exists(data.attrs, "ofs-x")) ofsX = atof(data.attrs["ofs-x"].c_str());
+		if (rs::Std::exists(data.attrs, "offset-x")) ofsX = atof(data.attrs["offset-x"].c_str());
+
+		if (rs::Std::exists(data.attrs, "ofsY")) ofsY = atof(data.attrs["ofsY"].c_str());
+		if (rs::Std::exists(data.attrs, "ofs-y")) ofsY = atof(data.attrs["ofs-y"].c_str());
+		if (rs::Std::exists(data.attrs, "offset-y")) ofsY = atof(data.attrs["offset-y"].c_str());
+
+		if (rs::Std::exists(data.attrs, "paddingLeft")) paddingLeft = atof(data.attrs["paddingLeft"].c_str());
+		if (rs::Std::exists(data.attrs, "padding-left")) paddingLeft = atof(data.attrs["padding-left"].c_str());
+
+		if (rs::Std::exists(data.attrs, "paddingRight")) paddingRight = atof(data.attrs["paddingRight"].c_str());
+		if (rs::Std::exists(data.attrs, "padding-right")) paddingRight = atof(data.attrs["padding-right"].c_str());
+
+		float constraintHeight = -1.0f;
+		float constraintWidth = -1.0f;
+		if (rs::Std::exists(data.attrs, "constraintHeight")) constraintHeight = atof(data.attrs["constraintHeight"].c_str());
+		else if (rs::Std::exists(data.attrs, "constraintWidth")) constraintWidth = atof(data.attrs["constraintWidth"].c_str());
+		else {
+			if (rs::Std::exists(data.attrs, "height") && data.attrs["height"] == "auto") {
+				constraintHeight = getFontSize();
+			}
+		}
+
+		bool measures = true;
+		if (rs::Std::exists(data.attrs, "measures")) measures = rd::String::parseBool(data.attrs["measures"].c_str());
+		
+		curX += paddingLeft;
+
+		rd::ABitmap * e = rd::Pools::abitmaps.alloc();
 		auto fd = lib->getFrameData(tileName);
-		lib->getTile(tileName,0, px, py, e->tile);
-		e->x = curX + ofsX;
-		e->y = curY + ofsY + cur->getBase() - e->height();
-		e->priority = le->getPriority();
-		add(e);
-		curX += e->width();
+		e->setCenterRatio(px, py);
+		e->set(lib);
+		e->playAndLoop(tileName);
+		if (constraintWidth > 0) e->constraintHeight(constraintWidth);
+		if (constraintHeight > 0) e->constraintHeight(constraintHeight);
+		if (!measures)
+			e->nodeFlags |= NodeFlags::NF_SKIP_MEASURES_FOR_BOUNDS;
+		e->x = std::lrint(curX + ofsX);
+		e->y = std::lrint(curY + ofsY + cur->getBase() - e->height());
+		e->vars.set("r2::Text::lineIndex", curLogicalLine);
+		e->vars.set("r2::Text::cx", curX);
+		e->vars.set("r2::Text::cy", curY);
+		e->vars.set("r2::Text::inlined", true);
+		if (filter) e->texFilterLinear();
+		addChild(e);
+		curX += e->width()+ paddingRight;
+		if (!animated) 
+			e->stop();
 	}
 	else if (data.tag == "font") {
 		if (rs::Std::exists(data.attrs, "name")) {
-			auto f = FontManager::get().getFont(data.attrs["name"]);
+			auto f = FontManager::get().getFont( data.attrs["name"].c_str());
 			fonts.push_back(fnt);
 			fnt = f;
 		}
@@ -222,6 +269,22 @@ void ri18n::RichText::stdTagStart(const char* t) {
 			}
 		}
 	}
+	else if (data.tag == "loc") {
+		if (node) {
+			auto& s = node->a0Data->strData;
+			if(ri18n::T::has(s))
+				node->repl = ri18n::T::get(s);
+			else {
+				#ifdef _DEBUG
+				node->repl = "~"s + s;
+				#endif
+			}
+		}
+	}
+	else if (data.tag == "i" || data.tag == "italic") {
+		//TODO
+		///pushItalic();
+	}
 }
 
 void ri18n::RichText::stdTagEnd(const char* t) {
@@ -240,17 +303,22 @@ void ri18n::RichText::stdTagEnd(const char* t) {
 			popCurrentColor();
 		}
 	}
-
 	if (rs::Std::exists(data.attrs, "class")) {
-		StrRef cl(data.attrs["class"]);
+		Str& cl = data.attrs[StrRef("class")];
 		auto pos = std::find(classes.begin(), classes.end(), cl);
 		if (pos != classes.end()) {
 			classes.erase(pos);
 		}
 	}
-
+	if (data.tag == "em") onEmEnd();
+	if (data.tag == "strong") onStrongEnd();
 	if (data.tag == "color") {
 		popCurrentColor();
+	}
+	else if ( data.tag == "i" || data.tag == "italic") {
+		//TODO
+		//setItalicBend(std::nullopt,false);
+		//popItalic();
 	}
 }
 
@@ -278,9 +346,9 @@ void ri18n::RichText::setTextColor(const r::Color& c) {
 
 void ri18n::RichText::im(){
 	using namespace ImGui;
-	r2::Text::im();
-
 	if (CollapsingHeader(ICON_MD_RTT " RichText")) {
+		Indent();
+		ImGui::Text("tree");
 		tree->im();
 		if (conf.mapCharactersToAst && TreeNode("Char Map To Nodes")) {
 			if (TreeNode("Starts")) {
@@ -297,7 +365,9 @@ void ri18n::RichText::im(){
 			}
 			TreePop();
 		}
+		Unindent();
 	}
+	r2::Text::im();
 }
 
 void ri18n::RichText::pushCurrentColor() {
@@ -314,6 +384,14 @@ void ri18n::RichText::popCurrentColor() {
 		forceColor = std::nullopt;
 }
 
+void ri18n::RichText::pushItalic() {
+	if (!italicMask) italicMask = new BitArray();
+	markItalicCharacters = true;
+}
+
+void ri18n::RichText::popItalic() {
+	markItalicCharacters = false;
+}
 
 void ri18n::RichText::pushCurrentOutline() {
 	saveOutline.push_back(outline);
@@ -325,7 +403,25 @@ void ri18n::RichText::popCurrentOutline() {
 		saveOutline.pop_back();
 	}
 	else
-		outline = 0;
+		outline = nullopt;
+}
+
+
+void ri18n::RichText::serialize(Pasta::JReflect& jr, const char* _name) {
+	if (rd::Bits::is(nodeFlags, NF_SKIP_SERIALIZATION))
+		return;
+	if (_name) jr.visitObjectBegin(_name);
+	r2::Text::serialize(jr, 0);
+	jr.visit(srcTree, "srcTree");
+	jr.visit(emColor, "emColor");
+	jr.visit(strongColor, "strongColor");
+	jr.visit(strongOutlineColor, "strongOutlineColor");
+
+	if (jr.isReadMode() && translationKey.empty() && !srcTree.empty() )
+		setTree(srcTree.c_str());
+	if (jr.isReadMode())
+		cache();
+	if (_name) jr.visitObjectEnd(_name);
 }
 
 void RichText::ensureCharMaps(){
@@ -349,11 +445,14 @@ void RichText::setTree(const char* _tree) {
 		return;
 	}
 
+	srcTree = _tree;
+
 	auto n = Nar().make(_tree);
 	if (n) {
 		tree = n;
 		cache();
 	}
+	syncAllMatrix();
 }
 
 void ri18n::RichText::dispose() {
@@ -370,6 +469,11 @@ void ri18n::RichText::dispose() {
 	curX = 0;
 	curY = 0;
 	r2::Text::dispose();
+}
+
+const char* ri18n::RichText::setText(const char* str) {
+	setTree(Nar().make(str));
+	return text.c_str();
 }
 
 void ri18n::RichText::setTree(AstNode* _tree){
@@ -413,7 +517,7 @@ void ri18n::RichText::cache(){
 	curLogicalLine = 0;
 
 	if (tree && bgColor.a > 0.f) {
-		BatchElem* le = firstElem();
+		BatchElem* le = getFirstElement();
 		BatchElem* e = rd::Pools::elems.alloc();
 		e->x = 0;
 		e->y = 0;
@@ -447,6 +551,9 @@ void ri18n::RichText::renderNode(AstNode* tree, float* x, float* y) {
 		ensureCharMaps();
 		charsToNodeStarts[curLogicalCharacter].push_back(tree);
 	}
+
+	if (markItalicCharacters) 
+		italicMask->set(curLogicalCharacter);
 
 	switch (tree->type) {
 	case AstNodeType::Seq: {
@@ -489,7 +596,14 @@ void ri18n::RichText::renderNode(AstNode* tree, float* x, float* y) {
 		onImportantEvent(tree->strData.c_str());
 		break;
 	case AstNodeType::Tag:
-		onTagStart(tree->strData.c_str());
+		onTagStart(tree->strData.c_str(), tree);
+		if (!tree->repl.empty()){
+			text += tree->repl;
+			const char* str = tree->repl.c_str();
+			while (str && *str != 0)
+				str = pushLine(str, x, y);
+		}
+		else
 			renderNode(tree->a0Data, x, y);
 		onTagEnd(tree->strData.c_str());
 		break;
@@ -531,16 +645,44 @@ void RichText::update(double dt){
 	al.update(dt);
 }
 
-void RichText::addAction(ActionDisplayInfo& info){
-	int here = 0;
-	if(info.raw){
-		info.raw->x = curX;
-		info.raw->y = curY;
-		addChild(info.raw);
-		curX += info.raw->width();
-		return;
-	}
-	
+void RichText::addInlinedNode(r2::Node * n) {
+	n->x = curX;
+	n->y = curY;
+	n->vars.set("r2::Text::lineIndex", curLogicalLine);
+	n->vars.set("r2::Text::cx", curX);
+	n->vars.set("r2::Text::cy", curY);
+	n->vars.set("r2::Text::inlined", true);
+	curX += n->width();
+	addChild(n);
 }
 
-#undef SUPER
+void RichText::addAction(ActionDisplayInfo& info){
+	int here = 0;
+	if(info.raw)
+		addInlinedNode(info.raw);
+}
+
+
+static RichText* sizer = 0;
+
+r::Vector2 RichText::getTextExtent(rd::Font* fnt, int fontSize, const char* txt) {
+	if (!sizer) sizer = new RichText();
+	auto t = sizer;
+	t->setFont(fnt);
+	t->setFontSize(fontSize);
+	t->setTree(txt);
+	auto sz = t->getSize();
+	t->dispose();
+	return sz;
+}
+
+r::Vector2 RichText::getTextSimulatedSize(rd::Font* fnt, int fontSize, const char* txt) {
+	if (!sizer) sizer = new RichText();
+	auto t = sizer;
+	t->setFont(fnt);
+	t->setFontSize(fontSize);
+	t->setTree(txt);
+	auto sz = t->getSize();
+	t->dispose();
+	return sz;
+}

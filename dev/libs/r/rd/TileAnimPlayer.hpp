@@ -23,29 +23,39 @@ namespace rd {
 		void			reset();
 	};
 
-
 	class AnimBus {
 	public:
+		Str					name;
+		double				maxSpeed = 16.0;
+		double				minSpeed = 0.000000001f;
 		double				speed = 1.0;
+		AnimBus*			parent = nullptr;
+
+		double				getFinalSpeed() { update(); return finalSpeed; };
+		void				update();
+		void				im();
+	protected:
+		double				finalSpeed = 1.0;
 	};
 
 	class TileAnimPlayer {
 	public:
+		bool							debug = false;
 		bool							needUpdates = true;
 		bool							destroyed = false;
 		bool							isPlaying = false;
 
-		eastl::vector<rd::TileAnim*>	stack;
-
 		AnimBus*						bus = nullptr;
 		IAnimated*						spr = nullptr;
+		TileAnimPlayerExtension*		ext = nullptr;
 
 		double							frameRate = 24.0;//default is taken from lib
 		double							speed = 1.0;
 		std::function<void(int)>		onFrame;//on cursor frame hit, beware to translate it to effective frame
 
-		TileAnimPlayerExtension*		ext = nullptr;
-
+		eastl::vector<rd::TileAnim*>	stack;
+		eastl::vector<rd::TileAnim>		history;
+		//Str							lastPlayed;
 		TileAnimPlayerExtension*		extend();
 	protected:
 		//lib is self managed
@@ -80,16 +90,20 @@ namespace rd {
 		void							setOnEnd(std::function<bool(rd::TileAnimPlayer*)> fun);
 
 		//a bit experimental ish, favour to add extension via extend() for safety
-		void							addOnEnd(std::function<bool(rd::TileAnimPlayer*)> fun);
+        void							addOnEnd(std::function<bool(rd::TileAnimPlayer*)> fun);
+
+        void							setOnLoop(std::function<bool(rd::TileAnimPlayer*)> fun);
 
 		TileAnim*						getLastAnim();
 		TileAnimPlayer*					play(const char * group, int nbPlays = 1, bool queueAnim = false);
 
 		TileAnimPlayer *				playAndLoop(const char * k);
 		TileAnimPlayer *				playAndLoop(const std::string& k) { return playAndLoop(k.c_str()); };
+		TileAnimPlayer *				playAndLoop(const Str& k) { return playAndLoop(k.c_str()); };
 
 		TileAnimPlayer *				chainAndLoop(const char * k);
 		TileAnimPlayer*					chainAndLoop(const std::string& k) { return chainAndLoop(k.c_str()); };
+		TileAnimPlayer*					chainAndLoop(const Str& k) { return chainAndLoop(k.c_str()); };
 
 		TileAnimPlayer *				loop();
 		TileAnimPlayer *				chain(const char * id);
@@ -117,7 +131,7 @@ namespace rd {
 
 		void							copy(TileAnimPlayer&toCopy);
 		void							syncCursorToSpr();
-
+		void							dumpState();
 		void							im();
 	protected:
 		void							initCurrentAnim();

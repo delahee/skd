@@ -10,9 +10,8 @@ static const char* z = "";
 rd::Anon::Anon(const char * name) {
 	mkVoid();
 	if (name)	this->name = name;
-	else		this->name = "";
+	else		this->name.clear();
 }
-
 
 rd::Anon::Anon(Anon&&val) {
 	data = val.data;
@@ -21,6 +20,19 @@ rd::Anon::Anon(Anon&&val) {
 
 	val.flags &= ~AFL_OWNS_DATA;
 	val.mkVoid();
+}
+
+void rd::Anon::dispose(){
+	if (sibling) 
+		sibling = sibling->destroy();
+	sibling = 0;
+
+	if (child) 
+		child = child->destroy();
+	child = 0;
+
+	freeData();
+	name.clear();
 }
 
 rd::Anon* rd::Anon::destroy(){
@@ -33,36 +45,40 @@ rd::Anon* rd::Anon::destroy(){
 	sibling = 0;
 	child = 0;
 
-	delete this;
+	if( flags & AFL_POOLED)
+		rd::Pools::anons.fastFree(this);
+	else 
+		delete this;
 
 	return s;
 }
 
-rd::Anon::~Anon()
-{
+rd::Anon::~Anon(){
 	freeData();
 	
+	if (flags & AFL_POOLED)
+		int here = 0;
+
 	if (sibling) {
-		delete sibling;
+		sibling = sibling->destroy();
 		sibling = 0;
 	}
 	if (child) {
-		delete child;
+		child = child->destroy();
 		child = 0;
 	}
 }
 
-bool& rd::Anon::asBool()
-{
+bool& rd::Anon::asBool(){
 	return reinterpret_cast<bool&>(data);
 }
 
 float& rd::Anon::asFloat() {
-	return reinterpret_cast<float*>(&data)[0];
+	return reinterpret_cast<float&>(data);
 }
 
 int& rd::Anon::asInt() {
-	return reinterpret_cast<int*>(&data)[0];
+	return reinterpret_cast<int&>(data);
 };
 
 void * rd::Anon::asPtr() {
@@ -91,11 +107,16 @@ std::string	rd::Anon::asStdString() {
 	return r;
 }
 
-
 Str rd::Anon::asStr() {
 	if (type != AType::AString)
 		return Str(z);
 	return Str((char*)data);
+};
+
+StrRef rd::Anon::asStrRef() {
+	if (type != AType::AString)
+		return StrRef(z);
+	return StrRef((char*)data);
 };
 
 char*rd::Anon::asString() { 
@@ -105,21 +126,18 @@ char*rd::Anon::asString() {
 };
 
 int64_t& rd::Anon::asInt64() {
-	int64_t* ptr = (int64_t *) data;
-	return *ptr;
+	return reinterpret_cast<int64_t&>(data);
 }
 
 uint64_t& rd::Anon::asUInt64(){
-	uint64_t* ptr = (uint64_t*) data;
-	return *ptr;
+	return reinterpret_cast<uint64_t&>(data);
 }
 
 double& rd::Anon::asDouble(){
-	return reinterpret_cast<double*>(data)[0];
+	return reinterpret_cast<double&>(data);
 }
 
-void rd::Anon::reserve(int size)
-{
+void rd::Anon::reserve(int size){
 	if (size > byteSize ) {
 		data = realloc(data, size);
 		byteSize = size;
@@ -284,7 +302,7 @@ void rd::Anon::unitTest()
 }
 
 rd::Anon * rd::Anon::createInt(int val,const char * name){
-	auto a = new rd::Anon(name);
+	auto a = rd::Anon::fromPool(name);
 	a->mkInt(val);
 	return a;
 }
@@ -313,7 +331,7 @@ string rd::Anon::toString() const {
 }
 
 rd::Anon * rd::Anon::createFloat(float val, const char * name ) {
-	auto a = new rd::Anon(name);
+	auto a = rd::Anon::fromPool(name);
 	a->mkFloat(val);
 	return a;
 }
@@ -321,7 +339,7 @@ rd::Anon * rd::Anon::createFloat(float val, const char * name ) {
 
 
 rd::Anon* rd::Anon::clone(bool recursive) const {
-	rd::Anon * c					= new rd::Anon(name.c_str());
+	rd::Anon * c = rd::Anon::fromPool(name.c_str());
 	
 	c->type = type;
 	c->typeEx = typeEx;
@@ -334,6 +352,7 @@ rd::Anon* rd::Anon::clone(bool recursive) const {
 		c->sibling = c->child = nullptr;
 
 	switch (c->type) {
+		case AType::AInt64:
 		case AType::AFloat:
 		case AType::AInt:
 			c->data = data;
@@ -373,7 +392,7 @@ int rd::Anon::countHierarchy() const{
 }
 
 void rd::Anon::addSibling(rd::Anon * sib) {
-	if (!sib)return;
+	if (!sib) return;
 
 	if (sibling == nullptr) {
 		sibling = sib;
@@ -421,7 +440,6 @@ void rd::Anon::addChild(rd::Anon * c) {
 
 rd::Anon* rd::Anon::mkInt(int v) {
 	freeData();
-
 	reinterpret_cast<int&>(data) = v;
 	type = rd::AType::AInt;
 	byteSize = 0;
@@ -430,27 +448,18 @@ rd::Anon* rd::Anon::mkInt(int v) {
 
 rd::Anon* rd::Anon::mkInt64(int64_t v) {
 	freeData();
-
-	byteSize = sizeof(int64_t);
-	data = malloc(byteSize);
+	//if this is a problme on ark 32, fetch the adress we have a padding zone _pad for an authorized overflow
+	reinterpret_cast<int64_t&>(data) = v;
 	type = rd::AType::AInt64;
-
 	asInt64() = v;
-	
-	flags |= AFL_OWNS_DATA;
 	return this;
 }
 
 rd::Anon* rd::Anon::mkDouble(double v) {
 	freeData();
-
-	byteSize = sizeof(double);
-	data = malloc(byteSize);
-
-	((double*)data)[0] = v;
-
+	//if this is a problme on ark 32, fetch the adress we have a padding zone _pad for an authorized overflow
+	reinterpret_cast<double&>(data) = v;
 	type = rd::AType::ADouble;
-	flags |= AFL_OWNS_DATA;
 	return this;
 }
 
@@ -484,8 +493,7 @@ bool rd::Anon::setValueFromString(AType t, const char* val){
 	return false;
 }
 
-void rd::Anon::updateString(const std::string& v)
-{
+void rd::Anon::updateString(const std::string& v){
 	if (type != rd::AType::AString)
 		mkString(v);
 	else {
@@ -509,13 +517,9 @@ void rd::Anon::updateUInt64(u64 v)
 rd::Anon* rd::Anon::mkUInt64(uint64_t v){
 	freeData();
 
-	byteSize = sizeof(uint64_t);
-	data = malloc(byteSize);
-
 	asUInt64() = v;
 
 	type = rd::AType::AUInt64;
-	flags |= AFL_OWNS_DATA;
 	return this;
 }
 
@@ -535,7 +539,6 @@ rd::Anon* rd::Anon::mkFloat(float v) {
 rd::Anon* rd::Anon::mkMatrix44(float * v) {
 	mkFloatBuffer(v, 16);
 	typeEx = ATypeEx::AMat44;
-
 	return this;
 }
 
@@ -584,7 +587,8 @@ rd::Anon* rd::Anon::mkIntBuffer(const int * v, int nbInts) {
 	byteSize = nbInts * sizeof(int);
 	data = malloc(byteSize);
 	int * val = (int *)data;
-	memcpy(val, v, byteSize);
+	if (v)	memcpy(val, v, byteSize);
+	else	memset(data, 0, byteSize);
 	flags |= AFL_OWNS_DATA;
 	type = AType::AIntBuffer;
 	return this;
@@ -615,6 +619,7 @@ rd::Anon* rd::Anon::mkColor(const r::Color& v) {
 }
 
 rd::Anon* rd::Anon::mkString(const char* str){
+	if (!str) return 0;
 	int len = strlen(str);
 	mkByteBuffer((uint8_t*)str, len+1);
 	type = AType::AString;
@@ -634,7 +639,7 @@ rd::Anon* rd::Anon::mkPtr(void * ptr){
 }
 
 bool rd::Anon::isBuffer(){
-	return (type == AType::AString || type == AType::AIntBuffer || type == AType::AFloatBuffer || type == AType::AByteBuffer || type == AType::AInt64) && data;
+	return (type == AType::AString || type == AType::AIntBuffer || type == AType::AFloatBuffer || type == AType::AByteBuffer ) && data;
 }
 
 void rd::Anon::freeData(){
@@ -651,7 +656,10 @@ void rd::Anon::freeData(){
 		flags &= ~AFL_OWNS_DATA;
 	}
 	
-	data = nullptr;
+	data = {};
+#ifdef ENVIRONMENT32
+	_pad = {};
+#endif
 	type = rd::AType::AVoid;
 	typeEx = rd::ATypeEx::AExVoid;
 	byteSize = 0;
@@ -672,6 +680,12 @@ r2::BatchElem* rd::Anon::asBatchElemPtr() {
 rd::Anon* rd::Anon::mkNodePtr(r2::Node* ptr) {
 	mkPtr(ptr);
 	typeEx = ATypeEx::ANodePtr;
+	return this;
+}
+
+rd::Anon* rd::Anon::mkAgentPtr(rd::Agent * ptr){
+	mkPtr(ptr);
+	typeEx = ATypeEx::AAgentPtr;
 	return this;
 }
 
@@ -699,6 +713,14 @@ int rd::Anon::getMemorySize()
 	if (child) sz += child->getMemorySize();
 	if (sibling) sz += sibling->getMemorySize();
 	return sz;
+}
+
+rd::Anon* rd::Anon::fromPool(const char* name){
+	auto an = rd::Pools::anons.alloc();
+	if (name) an->name = name;
+	else
+		an->name.clear();
+	return an;
 }
 
 std::vector<float> rd::Anon::getFloatBufferCopy() {
@@ -739,4 +761,17 @@ void rd::Anon::operator=(const Anon& rhs)
 		break;
 	}
 
+}
+
+bool rd::Anon::operator==(const Anon& rhs) const{
+	bool basicEq =
+		rd::String::equals(name.c_str(), rhs.name.c_str())
+		&& type == rhs.type
+		&& typeEx == rhs.typeEx;
+	if (!basicEq)
+		return false;
+	if (rhs.flags & AFL_OWNS_DATA) 
+		return 0 == memcmp(&data, &rhs.data, sizeof(data));
+	else 
+		return 0 == memcmp(&data, &rhs.data, rhs.byteSize);
 }

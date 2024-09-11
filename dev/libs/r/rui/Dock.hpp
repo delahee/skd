@@ -13,7 +13,19 @@ namespace rui {
 		virtual Vector2 getActualSize() = 0;//returns current size for docking in virtual units for ex 1920x1080 if in 4k will return 1920x1080 but parent is likely scale x2
 	};
 
-	r2::Node* dock(r2::Node* node, IContainer* ref, r::DIRECTION d, float offset);
-	r2::Node* dock(r2::Node* node, IContainer* ref, r::DIRECTION d, Vector2 offset);
+	/**
+	* Docking will not take internal pivot into account, 
+	* it will make its best to respect docking propertis for a top-left based sprite based on width and height properties
+	* which means for a text, you better not use blockAlign ( our model is not very good since 'block align' and 'position align' should be separated )
+	*/
+	r2::Node* dock(r2::Node* node, IContainer* ref, rd::Dir d, float offset);
+
+
+	/**
+	* Docking will not take internal pivot into account,
+	* it will make its best to respect docking propertis for a top-left based sprite based on width and height properties
+	* which means for a text, you better not use blockAlign ( our model is not very good since 'block align' and 'position align' should be separated )
+	*/
+	r2::Node* dock(r2::Node* node, IContainer* ref, rd::Dir d, Vector2 offset);
 }
 

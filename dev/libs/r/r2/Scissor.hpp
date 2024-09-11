@@ -20,6 +20,7 @@ public:
 
 	virtual Bounds			getMyLocalBounds() override;
 	virtual	NodeType		getType() const override { return NodeType::NT_SCISSOR; };
+	void	im();
 private:
 	
 };

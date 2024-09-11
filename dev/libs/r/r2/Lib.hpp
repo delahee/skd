@@ -5,9 +5,11 @@
 #include "r/Types.hpp"
 #include "r/Color.hpp"
 #include "r2/Types.hpp"
+#include "rd/Vars.hpp"
 
-#include <unordered_map>
-
+namespace rs {
+	class GfxContext;
+}
 namespace r2{
 	class Node;
 	class Scene;
@@ -37,6 +39,7 @@ namespace r2{
 		USF_Dither					= UBER_START << 14,
 
 		USF_ColorAdd				= UBER_START << 15,
+		USF_RenderResolution		= UBER_START << 16,
 	};
 
 	/***
@@ -136,6 +139,19 @@ namespace r2{
 		void upload(r2::Sprite* spr);
 	};
 
+	struct VignetteControl {
+		bool			enabled = true;
+		Pasta::Vector3	amount = r::Vector3(1,1,1);
+		r::Color		color = r::Color(0, 0, 0, 1);
+
+		void			neutral();
+		void			cut();
+		bool			im();
+		void			readFromShader(r2::Sprite* spr);
+		void			upload(r2::Sprite* spr);
+		void			setup(r2::Sprite* spr);
+	};
+
 	struct TextureHolder {
 		r::u32						flags = 0;
 		std::string					path;
@@ -150,16 +166,16 @@ namespace r2{
 		};
 	};
 
-	enum class ColorMatrixMode : u32 {
-		CMM_HSV, 
-		CMM_Colorize, 
-		CMM_Matrix,
-		CMM_Count,
+	enum class ColorMatrixMode : int {//todo remove cmm prefix and switch to int
+		HSV, 
+		Colorize, 
+		Matrix,
+		Count,
 	};
 
 	struct ColorMatrixControl {
 		bool						fresh = true;
-		ColorMatrixMode				mode = ColorMatrixMode::CMM_HSV;
+		ColorMatrixMode				mode = ColorMatrixMode::HSV;
 		float						hue = 0.0f;
 		float						sat = 1.0f;
 		float						val = 1.0f;
@@ -180,10 +196,18 @@ namespace r2{
 
 		//packup parameters into mat before upload
 		void pack();
-		void serialize(Pasta::JReflect* refl, const char * name=0);
+
+		//activate necessary flags
+		void setup(r2::Sprite* spr);
 		void upload(r2::Sprite* spr);
+		
+		//all inclusive transfer
+		void sync(r2::Sprite* spr);
 		void readFromShader(r2::Sprite* spr);
+		static inline Vector3 hsvIdentity() { return Vector3(0, 1, 1); };
 	};
+
+	
 
 	class Lib {
 
@@ -244,7 +268,7 @@ namespace r2{
 
 		static Pasta::ShaderProgram*		loadCustomShader(const char* shaderName, std::vector<const char*> defines = {});
 		static Pasta::ShaderProgram*		loadCustomShader(const char* pathVS, const char* pathFS, const char* version = "140", std::vector<const char*> defines = {});
-		static void							applyShaderValues(Pasta::Graphic* g, Pasta::ShaderProgram* shader, rd::Vars & shaderValues);
+		static void							applyShaderValues(rs::GfxContext* gctx, Pasta::ShaderProgram* shader, rd::Vars & shaderValues);
 
 		static r::Color						intToColor24(int rgb);
 		static r::Color						getColor(int rgb, float alpha=1.0f);
@@ -260,6 +284,9 @@ namespace r2{
 		static std::string					loadContent(const char * path);
 
 		static r::Vector2					screenToGlobal(r2::Scene*, r::Vector2 pt);
+
+		static Pasta::GraphicContextSettings getGraphicsSettings();
+		static r::u64						getTileHash( r2::Tile * t);
 	private:
 		static void							loadShader(Pasta::ShaderProgramDescription*, std::string);
 		static void							releaseShader(std::unordered_map<Pasta::u32, Pasta::ShaderProgram*>*);
@@ -274,4 +301,18 @@ namespace r2{
 
 static std::string transparencytype_to_string(Pasta::TransparencyType tt);
 
+template<> inline void Pasta::JReflect::visit(r2::ColorMatrixControl& cmc, const char* _name) {
+	visitObjectBegin(_name);
+
+	visit((int&)cmc.mode, "mode");
+	visit(cmc.hue, "hue");
+	visit(cmc.sat, "sat");
+	visit(cmc.val, "val");
+	visit(cmc.tint, "tint");
+	visit(cmc.ratioNew, "ratioNew");
+	visit(cmc.ratioOld, "ratioOld");
+	visit(cmc.mat, "mat");
+
+	visitObjectEnd(_name);
+};
 

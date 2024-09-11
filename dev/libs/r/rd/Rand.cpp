@@ -17,6 +17,36 @@ int rd::Rand::temper() {
 	return t0;
 }
 
+void rd::Rand::im(const char * prefix){
+	using namespace ImGui;
+#ifdef _DEBUG
+	bool opened = false;
+	if (prefix) {
+		opened = TreeNode(std::string(prefix) + " " + std::to_string(seed));
+		if (!opened)
+			return;
+	}
+
+	DragInt("seed", &seed);
+	LabelText("status","0x%x 0x%x 0x%x 0x%x", status[0], status[1], status[2], status[3]);
+	if (Button(ICON_MD_CAKE)) {
+		*this = {};
+	}
+	if (prefix && opened)
+		 TreePop();
+#endif
+}
+
+std::string rd::Rand::toString(){
+#ifndef _DEBUG
+	return {};
+#else
+	std::string  res;
+	res += std::to_string(seed);
+	return res;
+#endif
+}
+
 Rand& Rand::get() {
 	if (_self == nullptr) _self = new Rand();
 	return *_self;
@@ -26,7 +56,7 @@ Rand * Rand::_self = nullptr;
 
 rd::Rand::Rand() {
 	Pasta::u64 time = Pasta::Time::getTimeMarker();
-	seed = (time >> 32ull) ^ time ^ 0xdeadbeef;
+	int seed = (time >> 32ull) ^ time ^ 0xdeadbeef;
 	init(seed);
 }
 
@@ -74,4 +104,10 @@ void rd::Rand::nextState(){
 	int ly = y & 1;
 	status[1] ^= -ly & mat1;
 	status[2] ^= -ly & mat2;
+}
+
+
+Vector2 rd::Rand::circle(float _radius){
+	float a = angle();
+	return Vector2( cosf(a * _radius),sinf(a * _radius));
 }

@@ -5,27 +5,29 @@
 
 using namespace std;
 using namespace r2;
+using namespace rs;
 
-#define SUPER r2::Node
-
-Interact::Interact(r2::Node* p) : SUPER(nullptr){
-	name = string("Interact#") + to_string(uid);
-	
+Interact::Interact(r2::Node* p) : Super(nullptr){
 	//Cannot really find satisfying values for interact size 
 	//let's use a reasonably stupid yes observable value
 	rectWidth = 16;
 	rectHeight = 16;
 	if (p)//c++ won't call inherited members from within SUPER constructor
 		p->addChild(this);
+	setName("Interact");
 }
 
-Interact::Interact(float w,float h, r2::Node * p ) : SUPER(nullptr), rectWidth(w), rectHeight(h){
-	name = string("Interact#") + to_string(uid);
+Interact::Interact(float w,float h, r2::Node * p ) : Super(nullptr), rectWidth(w), rectHeight(h){
 	if (p)//c++ won't call inherited members from within SUPER constructor
 		p->addChild(this);
+	setName("Interact");
 }
 
 r2::Interact::~Interact(){
+	//traceNode("~inter",this);
+	r2::Scene* s = getScene();
+	if (s) 
+		s->removeEventTarget(this);
 	dispose();
 }
 
@@ -52,7 +54,7 @@ void r2::Interact::dispose(){
 		if (s->getCurrentOver() == this)
 			s->setCurrentOver(nullptr);
 	}
-	SUPER::dispose();
+	Super::dispose();
 }
 
 void r2::Interact::ensureScene() {
@@ -68,7 +70,7 @@ void r2::Interact::ensureScene() {
 }
 
 void r2::Interact::onEnterHierarchy() {
-	SUPER::onEnterHierarchy();
+	Super::onEnterHierarchy();
 	auto scene = getScene();
 	if (scene) {
 		scene->addEventTarget(this);
@@ -77,7 +79,7 @@ void r2::Interact::onEnterHierarchy() {
 }
 
 void r2::Interact::onExitHierarchy() {
-	SUPER::onExitHierarchy();
+	Super::onExitHierarchy();
 	Scene* scene = getScene();
 	if (scene) 
 		scene->removeEventTarget(this);
@@ -144,7 +146,7 @@ void r2::Interact::handleEvent(InputEvent & ev){
 
 
 Bounds r2::Interact::getMyLocalBounds(){
-	if (disableBounds) 
+	if (boundlessInteract) 
 		return Bounds().empty();
 	
 	auto b = Bounds();
@@ -159,7 +161,7 @@ Bounds r2::Interact::getMyLocalBounds(){
 r2::Bounds Interact::getMeasures(bool forFilters) {
 	if (forFilters) return Bounds().empty();
 
-	return SUPER::getMeasures(false);
+	return Super::getMeasures(false);
 }
 
 void r2::Interact::computeFocusLost(rs::InputEvent & ev){
@@ -177,13 +179,14 @@ void r2::Interact::computePush(InputEvent & ev){
 	r2::Scene * sc = getScene();
 
 	if (sc) foc = sc->getCurrentFocus();
+	if (foc != this) sc->setCurrentFocus(this,ev);
 
-	if (foc != this) sc->setCurrentFocus(this);
-
-	for (auto& e : onMouseButtonDowns) 
+	tmp = onMouseButtonDowns;
+	for (auto& e : tmp)
 		e(ev);
+	tmp.clear();
 
-	if( ev.stopPropagation != false)//if it's true or unset
+	if (ev.stopPropagation != false)//if it's true or unset
 		ev.stopPropagation = true;
 
 	isMouseDown = true;
@@ -191,24 +194,36 @@ void r2::Interact::computePush(InputEvent & ev){
 }
 
 void r2::Interact::computeRelease(InputEvent & ev){
-	for (auto& e : onMouseButtonUps) 
+	tmp = onMouseButtonUps;
+	for (auto& e : tmp)
 		e(ev);
+	tmp.clear();
+
 	if( ev.stopPropagation != false)
 		ev.stopPropagation = true;
 	isMouseDown = false;
 	mouseClickedDuration = -1;
 }
 
+//avoid weird reentrancy exceptions
+static r2::EventHandlers s_tmpOnMouseMoves;
 // clicked and overed
 void r2::Interact::computeMove(InputEvent & ev){
-	for (auto& e : onMouseMoves) e(ev);
+	tmp = onMouseMoves;
+	for (auto& e : tmp)
+		e(ev);
+	tmp.clear();
+
 	if ( ev.stopPropagation != false)
 		ev.stopPropagation = true;
 }
 
 void r2::Interact::computeOut(InputEvent & ev){
-	for (auto& e : onMouseOuts) 
+	tmp = onMouseOuts;
+	for (auto& e : tmp)
 		e(ev);
+	tmp.clear();
+
 	isMouseDown = false;
 	mouseClickedDuration = -1;
 	wasInside = false;
@@ -248,9 +263,8 @@ void r2::Interact::computeEnters(rs::InputEvent & ev){
 		ev.stopPropagation = true;
 }
 
-void r2::Interact::update(double dt)
-{
-	SUPER::update(dt);
+void r2::Interact::update(double dt){
+	Super::update(dt);
 	if(isMouseDown) mouseClickedDuration += dt;
 }
 
@@ -274,16 +288,34 @@ void r2::Interact::focus(bool callEvents){
 
 void r2::Interact::im(){
 	using namespace ImGui;
-	if (CollapsingHeader("Interact")) {
-		Indent();
-		
-		Checkbox("enabled", &enabled);
-		DragFloat("rect width", &rectWidth);
-		DragFloat("rect height", &rectHeight);
+	auto op = ImGuiTreeNodeFlags_DefaultOpen;
+    if (TreeNodeEx("Interact",op)) {
+        Checkbox("Enabled", &enabled);
+        Checkbox("Boundless", &boundlessInteract);
+		if (!boundlessInteract) {
+			DragFloat("Width", &rectWidth);
+			DragFloat("Height", &rectHeight);
+		}
+		if (TreeNodeEx("Sim",ImGuiTreeNodeFlags_DefaultOpen)) {
+			rs::InputEvent ev(rs::InputEventKind::EIK_Simulated, 0, 0);
+			if (Button("Focus"))
+				for (auto& e : onFocuses) e(ev);
+			if (Button("Blur"))
+				for (auto& e : onFocusLosts) e(ev);
+			if (Button("Enter")) 
+				for (auto& e : onMouseEnters) e(ev);
+			if (Button("Exit"))
+				for (auto& e : onMouseOuts) e(ev);
+			if (Button("Click"))
+				for (auto& e : onMouseButtonDowns) e(ev);
+			if (Button("Released"))
+				for (auto& e : onMouseButtonUps) e(ev);
+			TreePop();
+		}
+        TreePop();
+    }
+	Super::im();
 
-		Unindent();
-	}
-	SUPER::im();
 }
 
 void r2::Interact::fitToParent(){
@@ -309,4 +341,12 @@ bool r2::Interact::doesAcceptEvent(const rs::InputEvent& ev){
 		return doAcceptEventFunc(ev);
 	return true;
 }
-#undef SUPER
+
+r2::Interact* r2::Interact::fromPool(r2::Node* parent, int w, int h) {
+	auto inter = rd::Pools::interacts.alloc();
+	inter->rectWidth = w;
+	inter->rectHeight = h;
+	if (parent)
+		parent->addChild(inter);
+	return inter;
+}

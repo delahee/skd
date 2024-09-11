@@ -31,6 +31,11 @@ void Checksum::Initialize(){
 	}
 }
 
+r::u32 Checksum::CRC32(const char* _Buffer)
+{
+	return CRC32(_Buffer, strlen(_Buffer));
+}
+
 u32	Checksum::CRC32(const void *_Buffer, u32 _Size){
 	if (!_Size || !_Buffer)
 		return 0;

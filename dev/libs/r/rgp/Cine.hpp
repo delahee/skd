@@ -89,7 +89,7 @@ namespace rgp {
 			dispose();
 		};
 
-		void im();
+		bool im();
 
 	public:
 		CineStep*		last() { return steps.empty() ? 0 : steps[steps.size() - 1]; };

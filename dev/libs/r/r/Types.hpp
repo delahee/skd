@@ -9,7 +9,10 @@
 #include "1-graphics/geo_vectors.h"
 #include "1-graphics/FrameBuffer.h"
 #include "1-graphics/Texture.h"
+#include "Str.h"
 #include <optional>
+
+
 
 namespace r {
 	typedef Pasta::Matrix44				Matrix44;
@@ -18,8 +21,16 @@ namespace r {
 	typedef Pasta::Vector2				Vector2;
 	typedef Pasta::Vector3				Vector3;
 	typedef Pasta::Vector2i				Vector2i;
+	
 	typedef Pasta::Vector3i				Vector3i;
 	typedef Pasta::Vector4				Vector4;
+
+	//glsl style vec because am bored sweetie poo
+	typedef Pasta::Vector3i				vec3i;
+	typedef Pasta::Vector3				vec3;
+	typedef Pasta::Vector4				vec4;
+	typedef Vector2i					vec2i;
+	typedef Vector2						vec2;
 
 	typedef Pasta::FrameBuffer			FrameBuffer;
 
@@ -41,6 +52,7 @@ namespace r {
 
 	typedef std::int32_t				c32;//type for charcodes ( ofc char on u8 is not enough and c++ doesn't have this )
 
+	typedef Str							TKey;
 	typedef r::Vector3					Triangle[3];
 
 #ifdef DX_HVEC
@@ -49,65 +61,28 @@ namespace r {
 	typedef float f16;
 #endif
 
+	enum class Type : int {
+		None,
+		Int,
+		Float,
+		Vec2,
+		Vec3,
+		Vec4,
+		Vec2i,
+		Vec3i,
+		Vec4i,
+		Color,
+		Vars,
+		Enum,
+		String,
+	};
+
 	//template<typename T>
 	//using uptr = typename std::unique_ptr<T>;
 
-	enum DIRECTION {
-		UP = 1,
-		DOWN = 2,
-		LEFT = 4,
-		RIGHT = 8,
-
-		UP_LEFT = (1 | 4),
-		UP_RIGHT = (1 | 8),
-
-		DOWN_LEFT = (2 | 4),
-		DOWN_RIGHT = (2 | 8),
-
-		DIAG_TL = 16,
-		DIAG_TR = 32,
-		DIAG_BR = 64,
-		DIAG_BL = 128,
-
-		UP_DOWN = (1 | 2),//often aka vert center
-		LEFT_RIGHT = (4 | 8),//often aka horiz center
-
-		UP_DOWN_LEFT = (1 | 2 | 4),
-		UP_DOWN_RIGHT = (1 | 2 | 8),
-		UP_LEFT_RIGHT = (1 | 4 | 8),
-		DOWN_LEFT_RIGHT = (2 | 4 | 8),
-		TLDR = (1 | 2 | 4 | 8),
-
-		NONE = ~0U
-	};
-
-	extern const char* dirToString(DIRECTION dir);
-	extern std::vector<DIRECTION>	straightDirs;
-	extern std::vector<DIRECTION>	allDirs;
-	extern Vector3i					followDir(const Vector3i& v, DIRECTION dir);
-
-	class Ref {
-	public:
-		Ref() { nbRef = 1; };
-		Ref(const Ref&) { nbRef = 1; };
-
-		virtual			~Ref() { PASTA_ASSERT_MSG(nbRef <= 0, "Unreleased object!"); }
-
-		virtual int		incrRef() { return ++nbRef; }
-		inline int		addRef() { return incrRef(); }
-		inline int		acquire() { return incrRef(); }
-		inline int		lock() { return incrRef(); }
-
-		virtual void	decRef() { PASTA_ASSERT(nbRef > 0); if (nbRef > 0) { nbRef--; if (nbRef == 0) { delete this; } } };
-		inline void		release() { decRef(); };
-
-		inline int		refCount() const { return nbRef; }
-	protected:
-		int				nbRef = 0;
-	};
-
 	class IImWindow {
 	public:
+		virtual				~IImWindow() {};
 		virtual std::string	getName() = 0;
 		virtual bool		isImOpened() = 0;
 		virtual void		setImOpened(bool onOff) = 0;
@@ -116,7 +91,21 @@ namespace r {
 
 	class IImEntry {
 	public:
+
+		virtual				~IImEntry() {};
 		virtual bool		im() = 0;
+	};
+
+
+	class Object {
+	public:
+		virtual ~Object() {};
+	};
+
+	enum qbool : int {
+		False,
+		True,
+		Undetermined
 	};
 }
 
@@ -133,25 +122,44 @@ static inline std::size_t hashStr(const char * str ) {
 	return hash;
 }
 
-namespace std{
-	template<> struct hash<Str>	{
-		std::size_t operator()(const Str & s) const noexcept{
+namespace eastl {
+	template<> struct hash<Str> {
+		inline std::size_t operator()(const Str& s) const noexcept {
 			return hashStr(s.c_str());
-		}
+		};
+	};
+}
+namespace std{
+	//see rs::Std for to_string(...)
+
+	template<> struct hash<Str>	{
+		inline std::size_t operator()(const Str& s) const noexcept {
+			return hashStr(s.c_str());
+		};
 	};
 
 	template<> struct hash<Pasta::Vector2i> {
-		std::size_t operator()(const Vector2i& v) const noexcept {
+		inline std::size_t operator()(const Vector2i& v) const noexcept {
 			return v.x + 0x9e3779b9 * v.y;
-		}
+		};
+	};
+
+	template<> struct hash<std::pair<vec2i,vec2i>> {
+		inline std::size_t operator()(const std::pair<vec2i, vec2i>& v) const noexcept {
+			auto& p0 = v.first;
+			auto& p1 = v.second;
+			return p0.x + 0x9e3779b9 * p0.y + p1.x * 0x13371337 + p1.y * (0x9e3779b9 ^ 0x13371337);
+		};
 	};
 
 	template<> struct hash<Pasta::Vector3i> {
-		std::size_t operator()(const Vector3i& v) const noexcept {
+		inline std::size_t operator()(const Vector3i& v) const noexcept {
 			return v.x + 0x13371337 * v.y + 0x9e3779b9 * v.z;
-		}
+		};
 	};
+
 }
+
 
 
 // Check windows
@@ -172,8 +180,15 @@ namespace std{
 #endif
 #endif
 
-#include "Macros.hpp"
+#include "r/Vector2d.hpp"
+#include "r/Vector4i.hpp"
 
+namespace r {
+	typedef Vector2d					vec2d;
+	typedef Vector4i					vec4i;
+}
+
+#include "Macros.hpp"
 
 
 

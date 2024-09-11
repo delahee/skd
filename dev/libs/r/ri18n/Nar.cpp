@@ -146,16 +146,64 @@ string AstNode::to_string(AstNodeType t){
 		case AstNodeType::TagFrom: return "TagFrom";  break;
 		case AstNodeType::Nop: return "Nop";  break;
 		case AstNodeType::Script: return "Script";  break;
+
 	}
 	return "";
 }
 
-void ri18n::AstNode::im()
-{
+static void imNar(ri18n::AstNode* ast) {
+	if (!ast)
+		return;
+	using namespace ri18n;
 	using namespace ImGui;
-	ImGui::Text(to_string(type));
-	if (TreeNode(">")) {
 
-		TreePop();
+	switch (ast->type) {
+
+	case AstNodeType::Seq:
+		ImGui::Text("Seq");
+		Indent();
+		imNar(ast->a0Data);
+		imNar(ast->a1Data);
+		Unindent();
+		break;
+	case AstNodeType::Sentence:
+		ImGui::Text("\""s + ast->strData + "\""); 
+		break;
+	case AstNodeType::Em://[[fallthrough]]
+	case AstNodeType::Strong:
+		Indent();
+		imNar(ast->a0Data);
+		Unindent();
+		break;
+	case AstNodeType::Script:
+		ImGui::Text(Nar().stringify(ast));
+		break;
+	case AstNodeType::CondEvent:
+	case AstNodeType::UniqueEvent:
+	case AstNodeType::CondUniqueEvent:
+	case AstNodeType::ImportantEvent:
+	case AstNodeType::Event:
+		ImGui::Text(Nar().stringify(ast));
+		break;
+
+	case AstNodeType::Tag:
+		ImGui::Text("<"s + ast->strData + ">");
+		Indent();
+		imNar(ast->a0Data);
+		Unindent();
+		break;
+	case AstNodeType::TagFrom:
+		ImGui::Text("[>"s + ast->strData + "]");
+		Indent();
+		imNar(ast->a0Data);
+		Unindent();
+		break;
 	}
+
+
 }
+void ri18n::AstNode::im(){
+	using namespace ImGui;
+	imNar(this);
+}
+

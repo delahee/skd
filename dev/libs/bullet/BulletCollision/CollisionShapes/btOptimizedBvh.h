@@ -14,7 +14,7 @@ subject to the following restrictions:
 */
 
 ///Contains contributions from Disney Studio's
-
+#pragma once
 #ifndef BT_OPTIMIZED_BVH_H
 #define BT_OPTIMIZED_BVH_H
 

@@ -14,7 +14,7 @@ namespace rui {
 		virtual bool isFocused()					= 0;
 		virtual void setFocused(bool _onOff)		= 0;
 
-		virtual bool isGreyed()						= 0;
+		virtual bool isGreyed()	const				= 0;
 		virtual void setGreyed(bool _onOff)			= 0;
 
 		virtual bool isVisible()					= 0;
@@ -24,13 +24,18 @@ namespace rui {
 		virtual bool canInteract()					= 0;
 
 		//event simulators
-		virtual void onMouseOut(rs::InputEvent &)	= 0;
+		virtual void onMouseEnter()					= 0;
+		virtual void onMouseOut()					= 0;
 		virtual void onMouseOver()					= 0;
 		virtual void onFocus()						= 0;
 		virtual void onFocusLost()					= 0;
 
 		virtual void		doClick()				= 0;
 		virtual r::Vector2	getPosition()			= 0;
+
+		//for sorting purpose
+		virtual r::Vector2	getAbsolutePosition()	= 0;
 		virtual r::Vector2	getSize()				= 0;
+
 	};
 }

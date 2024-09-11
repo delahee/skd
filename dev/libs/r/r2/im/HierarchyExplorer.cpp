@@ -7,16 +7,19 @@
 #include "rd/JSerialize.hpp"
 #include "rd/AudioEmitter2D.hpp"
 #include "rs/Std.hpp"
+#include "ri18n/RichText.hpp"
 
 using namespace std;
 using namespace r;
 using namespace r2;
+using namespace rd;
 using namespace r2::im;
 
 static string noName = "noname";
 
-eastl::vector<r2::Scene*> HierarchyExplorer::scs;
-HierarchyExplorer* HierarchyExplorer::me = nullptr;
+eastl::vector<r2::Scene*>		HierarchyExplorer::scs;
+HierarchyExplorer*				HierarchyExplorer::me = nullptr;
+HierarchyExplorer::GameIPC		HierarchyExplorer::gameIPC;
 
 HierarchyExplorer::HierarchyExplorer(r2::Scene* _sc, rd::AgentList* al) : rd::Agent(al) {
 	me = this;
@@ -25,43 +28,59 @@ HierarchyExplorer::HierarchyExplorer(r2::Scene* _sc, rd::AgentList* al) : rd::Ag
 }
 
 void HierarchyExplorer::removeScene(r2::Scene* _sc) {
-	if (_sc) {
-		if (!rs::Std::exists(scs, _sc))
-			return;
-		Std::remove(scs, _sc);
-	}
+	if (!_sc) return;
+	if (!rs::Std::exists(scs, _sc))
+		return;
+
+	Std::remove(scs, _sc);
 }
 
 void HierarchyExplorer::addScene(r2::Scene* _sc) {
-	if (_sc) {
-		if (rs::Std::exists(scs, _sc))
-			return;
+	if (!_sc) return;
+	if (rs::Std::exists(scs, _sc))
+		return;
 
-		scs.push_back(_sc);
-		_sc->onDeletion.addOnce([this, _sc]() {
-			Std::remove(scs, _sc);
-		});
-	}
+	scs.push_back(_sc);
+	_sc->onDeletion.addOnce([_sc]() {
+		Std::remove(scs, _sc);
+	});
 }
 
 HierarchyExplorer::~HierarchyExplorer() {
-	dispose();
+	onDestruction();
 	me = nullptr;
 }
 
+void HierarchyExplorer::hide() {
+	if (me != nullptr)
+		me->imOpened =false;
+}
+
 void HierarchyExplorer::toggle(r2::Scene* sc) {
-	if (r2::im::HierarchyExplorer::me == nullptr)
+	if (me == nullptr)
 		new r2::im::HierarchyExplorer(sc, &rs::Sys::enterFrameProcesses);
 	else {
 		auto inst = me;
-		inst->addScene(sc);
-		inst->imOpened = ! inst->imOpened;
+		if (sc == 0) 
+			inst->imOpened = false;
+		else {
+			inst->addScene(sc);
+			inst->imOpened = !inst->imOpened;
+		}
+		inst->onImChanged();
 	}
 }
 
 r2::Node* HierarchyExplorer::popupType() {
 	if (ImGui::BeginPopupContextItem("TypeSelect", 0)) {
 		r2::Node* nu = nullptr;
+
+		auto &ipc = HierarchyExplorer::gameIPC;
+
+		ipc.onImAddNodeBegin();
+		if (ipc.nu)
+			nu = ipc.nu;
+
 		if (ImGui::Selectable("Node")) nu = new Node();
 		//not sure anybody want to make a regular "sprite" but can be useful as a filter cache with custom props
 		if (ImGui::Selectable("Sprite")) nu = new Sprite();
@@ -72,8 +91,12 @@ r2::Node* HierarchyExplorer::popupType() {
 		}
 		if (ImGui::Selectable("Anim. Bitmap")) nu = new ABitmap();
 		if (ImGui::Selectable("Graphics")) nu = new Graphics();
+		if (ImGui::Selectable("VertexArray")) nu = new VertexArray();
 		if (ImGui::Selectable("Batch")) nu = new Batch();
 		if (ImGui::Selectable("Text")) nu = new Text(nullptr, "this is a text!");
+		if (ImGui::Selectable("Rich Text")) nu = new ri18n::RichText(nullptr, "this is a text!");
+		if (ImGui::Selectable("Scissor"))
+			nu = new Scissor(Rect(0,0,200,200), nullptr);
 		if (ImGui::Selectable("Audio Emitter 2D"))
 			nu = new rd::AudioEmitter2D(nullptr);
 		if (ImGui::Selectable("Slice3")) {
@@ -85,6 +108,12 @@ r2::Node* HierarchyExplorer::popupType() {
 			nu = new Slice9(nullptr, prm);
 		}
 		if (ImGui::Selectable("Node3D")) nu = new r3::Node3D(nullptr);
+		if (ImGui::Selectable("Button")) nu = new rui::Button("", nullptr, nullptr);
+
+		ipc.onImAddNodeEnd();
+		if (ipc.nu)
+			nu = ipc.nu;
+
 		ImGui::EndPopup();
 		return nu;
 	}
@@ -106,6 +135,8 @@ r2::Node* HierarchyExplorer::menuType() {
 	if (ImGui::MenuItem("Graphics")) nu = new Graphics();
 	if (ImGui::MenuItem("Batch")) nu = new Batch();
 	if (ImGui::MenuItem("Text")) nu = new Text(nullptr, "this is a text!");
+	if (ImGui::MenuItem("Rich Text")) nu = new ri18n::RichText(nullptr, "this is a text!");
+	if (ImGui::MenuItem("Scissor")) nu = new Scissor(Rect(0, 0, 100, 100));
 	if (ImGui::MenuItem("Slice3")) {
 		Slice3Param prm;
 		nu = new Slice3(nullptr,prm);
@@ -124,17 +155,12 @@ bool HierarchyExplorer::popupAction(r2::Node* n, bool showEdit, int mouseButton)
 	bool edProtected = n->nodeFlags & NF_EDITOR_PROTECT;
 	bool isUtil = n->nodeFlags & NF_UTILITY;
 	if (ImGui::BeginPopupContextItem("Actions", mouseButton)) {
-		if (showEdit && ImGui::MenuItem("Edit")) {
+		if (showEdit && ImGui::MenuItem("Edit")) 
 			NodeExplorer::edit(n);
-		}
-		if (ImGui::MenuItem("Save")) {
+		if (ImGui::MenuItem("Save")) 
 			save(n, nullptr);
-			cout << "saved:" << n->name << endl;
-		}
-		if (ImGui::MenuItem("Load")) {
+		if (ImGui::MenuItem("Load")) 
 			load(n, nullptr);
-			cout << "loaded:" << n->name << endl;
-		}
 		if (ImGui::MenuItem("Clone")) {
 			auto cl = n->clone();
 			n->parent->addChild(cl);
@@ -183,11 +209,15 @@ void HierarchyExplorer::imToolbar(r2::Node* n, bool& skipAfter) {
 		ImGui::PushID("add");
 		SameLine();
 		ImGui::Button(ICON_MD_ADD);
+
+		auto& ipc = gameIPC;
+		ipc.cur = n;
 		r2::Node* nu = popupType();
 		if (nu) {
 			n->addChildAt(nu, 0);
 			NodeExplorer::edit(nu);
 		}
+		ipc.nu = ipc.cur = 0;
 		ImGui::PopID();
 
 		if (!edProtected) {
@@ -211,13 +241,16 @@ void HierarchyExplorer::imToolbar(r2::Node* n, bool& skipAfter) {
 
 void HierarchyExplorer::im(r2::Node* n, int depth) {
 	using namespace ImGui;
+
+	if (!imOpened)
+		return;
 	bool isUtil = n->nodeFlags & NF_UTILITY;
 	bool edProtected = n->nodeFlags & NF_EDITOR_PROTECT;
 
 	if (strlen(n->name.c_str()) == 0) 
 		n->name = noName + "#" + to_string(n->uid);
 
-	string id = n->name + "#" + to_string(n->uid) + "##heToolbar";
+	string id = n->name.cpp_str() + "#" + to_string(n->uid) + "##heToolbar";
 	ImGui::PushID(id.c_str());
 
 	ImGuiTreeNodeFlags node_flags = ImGuiTreeNodeFlags_None;
@@ -321,7 +354,7 @@ void HierarchyExplorer::im(r2::Node* n, int depth) {
 					be = be->next;
 					continue;
 				}
-				ImGui::PushID(be);
+				ImGui::PushID(be->uid);
 				ImGui::BulletText("x:%6.2f  y:%6.2f z:%6.2f", be->x, be->y, be->z);
 				ImGui::NextColumn();
 
@@ -330,14 +363,15 @@ void HierarchyExplorer::im(r2::Node* n, int depth) {
 					be->visible = !be->visible;
 				if (ImGui::IsItemHovered()) {
 					r2::Im::bounds(be);
-					SetTooltip("uid:" + to_string(be->uid));
+					SetTooltip( Str256f( "%s uid:%ld", be->name.c_str(),be->uid));
 				}
 				SameLine();
-				if (ImGui::Button(ICON_MD_IMAGE_SEARCH))
+				Str256f btUID(ICON_MD_IMAGE_SEARCH  "##icbe%ld", be->uid);
+				if (ImGui::Button(btUID.c_str()))
 					BatchElemExplorer::edit(be);
 				if (ImGui::IsItemHovered()) {
 					r2::Im::bounds(be);
-					SetTooltip("uid:" + to_string(be->uid));
+					SetTooltip(Str256f("%s uid:%ld", be->name.c_str(), be->uid));
 				}
 				be = be->next;
 				ImGui::PopStyleVar(1);
@@ -400,7 +434,7 @@ void HierarchyExplorer::update(double dt) {
 	using namespace ImGui;
 	ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
 
-	bool opened = true;
+	bool opened = imOpened;
 	if (ImGui::Begin("Hierarchy Explorer", &opened)) {
 		ImGui::Checkbox("show utilities", &showUtilities);
 		if (strlen(searchFilter.c_str()) == 0)
@@ -426,7 +460,7 @@ void HierarchyExplorer::update(double dt) {
 
 	ImGui::End();
 
-	if (!opened) delete this;
+	if (!opened) safeDestruction();
 }
 
 #ifdef PASTA_WIN
@@ -439,28 +473,36 @@ static string norm(string path) {
 
 void HierarchyExplorer::save(r2::Node* n, const char* filename) {
 	string fname;
-	if (!filename)	fname = n->name + ".meta.json";
+	if (!filename)	fname = n->name.cpp_str() + ".meta.json";
 	else			fname = filename;
 #ifdef PASTA_WIN
+	fname = rd::String::replace(fname,":", "_");
 	fname = norm(fname);
 #endif
 
 	if (!jSerialize(*n, r::Conf::EDITOR_PREFAB_FOLDER, fname.c_str()))
-		std::cout << "scene save failed" << std::endl;
+		std::cout << "scene save failed\n";
+	else
+		trace("saved "s + fname);
 }
 
 r2::Node* HierarchyExplorer::load(r2::Node* n, const char* filename) {
-	string fname;
+	Str fname;
 	if (!filename) {
-		if (n)
-			fname = n->name + ".meta.json";
+		if (n) {
+			fname = n->name;
+			fname = rd::String::replace(fname, ":", "_");
+			fname = fname + ".meta.json";
+		}
 	}
 	else
 		fname = filename;
 	if (n == nullptr)
 		n = new Node();
 	if (!jDeserialize(*n, r::Conf::EDITOR_PREFAB_FOLDER, fname.c_str()))
-		std::cout << "scene save failed" << std::endl;
+		std::cout << "scene load failed \n";
+	else
+		trace("loaded "s + fname.c_str());
 	return n;
 }
 

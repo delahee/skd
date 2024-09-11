@@ -13,7 +13,7 @@ namespace r2 {
 
 	class Tile {
 	protected:
-		Pasta::Texture* tex = nullptr;
+		Pasta::Texture*			tex = nullptr;
 	public:
 		double					x = 0;//rectangle x upon texture
 		double					y = 0;//rectangle y upon texture
@@ -31,6 +31,7 @@ namespace r2 {
 		double					v1 = 0.0;
 		double					u2 = 1.0;
 		double					v2 = 1.0;
+		const char*				debugName = 0;
 
 	public:
 								Tile();
@@ -110,7 +111,9 @@ namespace r2 {
 
 		void					mapTexture(Pasta::Texture* _tex);
 		r2::Bounds				getBounds();
-		bool					im();
+
+		void					smallPreview();
+		bool					im(bool preview = true, bool pick = true);
 
 		r::u64					getHash();
 

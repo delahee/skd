@@ -12,7 +12,7 @@ subject to the following restrictions:
 2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.
 */
-
+#pragma once
 #ifndef BT_BROADPHASE_INTERFACE_H
 #define BT_BROADPHASE_INTERFACE_H
 
@@ -32,8 +32,8 @@ struct btBroadphaseRayCallback : public btBroadphaseAabbCallback
 {
 	///added some cached data to accelerate ray-AABB tests
 	btVector3 m_rayDirectionInverse;
-	unsigned int m_signs[3];
-	btScalar m_lambda_max;
+	unsigned int m_signs[3] = {};
+	btScalar m_lambda_max = {};
 
 	virtual ~btBroadphaseRayCallback() {}
 

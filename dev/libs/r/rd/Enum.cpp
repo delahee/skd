@@ -2,6 +2,32 @@
 
 #include "rd/Enum.hpp"
 
+using namespace rd;
+
+static rd::Enum * dummy = 0;
+
+rd::EnumConstructor::EnumConstructor(const std::initializer_list<std::string>& l, int dfltIdx ){
+	for(auto &id : l )
+		list.push_back(Str(id));
+	defaultIdx = dfltIdx;
+}
+
+void EnumList::im(){
+	using namespace ImGui;
+	int idx = 0;
+	for(auto&e :content){
+		ImGui::Text(std::to_string(idx)); SameLine();
+		Value("id", e.id);
+		if(e.vars.count()){
+			Indent();
+			e.vars.im(false,"params");
+			Unindent();
+		}
+		idx++;
+	}
+}
+
+
 EnumList& EnumList::operator+=(const char* name) {
 	rd::Enum en;
 	en.id = name;
@@ -113,16 +139,21 @@ rd::EnumList rd::Enum::parseEnumList(const char* src, c32 delim) {
 	rd::EnumList res;
 	if (!src) return res;
 	if (!*src) return res;
+	
+	start = src;
+	cur = start;
 	do {
 		auto p = rd::Enum::parseEnum(start, cur);
 		if (p.id.empty())
+			break;
+		if (start == cur)
 			break;
 		start = rd::String::skipWhitespace(cur);
 		res.content.push_back(p);
 		start = rd::String::skipWhitespace(cur);
 		if (!start || !*start)
 			break;
-		if( *start == delim )
+		if (*start == delim)
 			start++;
 		start = rd::String::skipWhitespace(start);
 	} while (*cur);
@@ -145,12 +176,28 @@ rd::Enum rd::Enum::parseEnum(const char* src, const char*& next) {
 	rd::Enum p("");
 
 	src = rd::String::skipWhitespace(src);
+	if (!*src)
+		return p;
 
 	const char* start = src;
 	const char* findFirstOpeningParen = strstr(src, "(");
+	const char* findFirstSpace = strstr(src, " ");//rd::String::skipIdentifier
+	bool useParenScan = false;
 
-	//enum is selfClose ( ex : HasKnockback )
-	if (findFirstOpeningParen == 0) {
+	if (!findFirstOpeningParen) {
+		useParenScan = false;
+	}
+	else {
+		if (findFirstSpace && findFirstOpeningParen) {
+			if ( (findFirstOpeningParen-start) < (findFirstSpace-start))
+				useParenScan = true;
+		}
+		if (!findFirstSpace && findFirstOpeningParen)
+			useParenScan = true;
+		
+	}
+	
+	if (!useParenScan) {
 		std::string l;
 
 		const char* scan = start;
@@ -159,17 +206,21 @@ rd::Enum rd::Enum::parseEnum(const char* src, const char*& next) {
 
 		l.assign(start, scan - start);
 		int len = strlen(src);
-		while (l[l.length() - 1] == ' ')
+		if( len > 1)
+		while(l.length() && (l[l.length() - 1] == ' '))
 			l[l.length() - 1] = 0;
 		l.resize(strlen(l.c_str()));
 
 		p.id = l;
 		if (next)
-			next = scan;
+			next = src = rd::String::skipWhitespace(scan);
 
 		return p;
 	}
 	else {
+		if (findFirstOpeningParen == 0) {
+			int here = 0;
+		}
 		const char* rest = findFirstOpeningParen + 1;
 		std::string l = std::string().assign(start, rest - start - 1);
 		l = rd::String::trim(l);
@@ -177,6 +228,8 @@ rd::Enum rd::Enum::parseEnum(const char* src, const char*& next) {
 		int argIdx = 0;
 		do {
 			rest = parseEnumArg(rest, &p.vars, argIdx);
+			if (!rest)
+				return p;
 			rest = rd::String::skipWhitespace(rest);
 			if (*rest == ')') {
 				//finito
@@ -190,14 +243,78 @@ rd::Enum rd::Enum::parseEnum(const char* src, const char*& next) {
 		} while (rest);
 
 		if (next)
-			next = rest;
+			next = rd::String::skipWhitespace(rest);
 	}
 	return p;
 }
 
-bool rd::EnumList::has(const char* name) {
+bool rd::EnumList::empty() const {
+	return content.empty();
+}
+
+rd::Enum& rd::EnumList::get(const char* name) {
+	for (auto& e : content)
+		if ( rd::String::equalsI(e.id , name))
+			return e;
+	if (!dummy) {
+		dummy = new rd::Enum();
+		dummy->id = "dummy";
+		dummy->vars.set("0", 0);
+		dummy->vars.set("1", 0);
+		dummy->vars.set("2", 0);
+		dummy->vars.set("3", 0);
+	}
+	return *dummy;
+}
+
+bool rd::EnumList::has(const char* name) const{
 	for (auto& e : content)
 		if ( rd::String::equalsI(e.id , name))
 			return true;
 	return false;
+}
+
+bool rd::Enum::validate(EnumConstructor* _ctors){
+	if (!_ctors) return false;
+
+	ctors = _ctors;
+
+	bool found = false;
+	for (auto& e : _ctors->list)
+		if (rd::String::equalsI(id, e.c_str())) {
+			found = true;
+			break;
+		}
+	if (!found) {
+		if( !id.empty())
+			trace(id.cpp_str() + " is not a member of constructors " + rd::String::join(_ctors->list,",").cpp_str());
+		if(_ctors->defaultIdx>=0)
+			id = _ctors->list[_ctors->defaultIdx];
+	}
+	return found;
+}
+
+int rd::Enum::i(int idx, int dfl) const {
+	return vars.getInt(Str16f("%d", idx).c_str(), dfl);
+}
+
+float rd::Enum::f(int idx, float dfl) const {
+	return vars.getInt(Str16f("%d", idx).c_str(), dfl);
+}
+
+const char* rd::Enum::s(const char* name, const char* dflt) {
+	return vars.getString(name, dflt);
+}
+
+bool rd::Enum::operator==(const Enum& o) const {
+	if (id != o.id)
+		return false;
+	if (!vars.isEqual(o.vars))
+		return false;
+	return true;
+}
+
+rd::Anon* rd::Enum::operator[](int idx){
+	Str16f num("%d", idx);
+	return vars.get(num.c_str());
 }

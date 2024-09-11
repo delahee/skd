@@ -56,6 +56,7 @@ Tile::~Tile() {
 	if (flags & R2_TILE_MUST_DESTROY_TEX)
 		disposeTexture();
 	flags = 0;
+	debugName = 0;
 }
 
 void Tile::enableTextureOwnership(bool onOff) {
@@ -73,15 +74,17 @@ Tile * r2::Tile::fromWhite(){
 	return fromPool( GpuObjects::whiteTex );
 }
 
-void r2::Tile::toPool(){
-	rd::Pools::tiles.free(this);
+void r2::Tile::toPool() {
+	rd::Pools::tiles.release(this);
 }
 
-void r2::Tile::mapTexture(Pasta::Texture * _tex)
-{
+void r2::Tile::mapTexture(Pasta::Texture * _tex) {
 	setCenterDiscrete(0, 0);
 	setPos(0, 0);
-	setSize(_tex->getLogicalWidth(), _tex->getLogicalHeight());
+	if (_tex)
+		setSize(_tex->getLogicalWidth(), _tex->getLogicalHeight());
+	else
+		setSize(0, 0);
 	setTexture(_tex);
 }
 
@@ -116,7 +119,8 @@ void r2::Tile::set(Pasta::Texture * _tex, int _x, int _y, int _w, int _h, int _d
 void r2::Tile::clear(){
 	if (mustDestroyTex()) 
 		disposeTexture();
-	tex = nullptr;
+	debugName = {};
+	tex = {};
 
 	x = 0;//rectangle x upon texture
 	y = 0;//rectangle y upon texture
@@ -175,8 +179,7 @@ void Tile::setCenterRatio(double px, double py) {
 	dy = - py * height;
 }
 
-void r2::Tile::setUV(double u1, double v1, double u2, double v2)
-{
+void r2::Tile::setUV(double u1, double v1, double u2, double v2){
 	this->u1 = u1;
 	this->u2 = u2;
 	this->v1 = v1;
@@ -203,7 +206,7 @@ Tile* r2::Tile::fromColor(const r::Color & c) {
 		texData[i] = c.toIntRGBA();
 	}
 	Pasta::Texture* tex= ctx->CreateTexture(loader->loadRaw(texData, 4, 4));
-	auto t = new r2::Tile(tex);
+	auto t = r2::Tile::fromPool(tex);
 	t->setPos(2, 2);
 	t->setSize(1, 1);
 	return t;
@@ -307,30 +310,8 @@ void Tile::translatePos(double _dx, double _dy) {
 	}
 }
 
-/*
-void Tile::setPos(int _x, int _y) {
-	this->x = _x;
-	this->y = _y;
-	if (tex) {
-		u1 = (float)x / tex->getWidth();
-		v1 = (float)y / tex->getHeight();
-		u2 = (float)(width + x) / tex->getWidth();
-		v2 = (float)(height + y) / tex->getHeight();
-	}
-}
 
-void Tile::setSize(int w, int h) {
-	width = w;
-	height = h;
-	if (tex) {
-		u2 = (float)(w + x) / tex->getWidth();
-		v2 = (float)(h + y) / tex->getHeight();
-	}
-}
-*/
-
-void r2::Tile::setPos(double _x, double _y)
-{
+void r2::Tile::setPos(double _x, double _y){
 	this->x = _x;
 	this->y = _y;
 	if (tex) {
@@ -342,8 +323,7 @@ void r2::Tile::setPos(double _x, double _y)
 	}
 }
 
-void r2::Tile::setSize(double w, double h)
-{
+void r2::Tile::setSize(double w, double h){
 	width = w;
 	height = h;
 	if (tex) {
@@ -363,8 +343,7 @@ void r2::Tile::flipY(){
 	dy = -dy - height;
 }
 
-void r2::Tile::resetTargetFlip()
-{
+void r2::Tile::resetTargetFlip(){
 	flags &= ~R2_TILE_TARGET_FLIPED;
 }
 
@@ -403,12 +382,12 @@ void r2::Tile::setTexture(Pasta::Texture * _tex) {
 
 u64 r2::Tile::getHash() {
 	return (u64) tex 
-		+ uid
-		+ (u64)(u1 * 1024 * 1024)
-		+ (u64)(u2 * 1024 * 1024)
+		^ uid
+		+ (u64)(u1 )
+		+ (u64)(u2 * 1024)
 		+ (u64)(v1 * 1024 * 1024)
-		+ (u64)(v2 * 1024 * 1024)
-		+ (u64)(dx * 1024 * 1024)
+		+ (u64)(v2 * 1024 * 1024 * 1024)
+		+ (u64)(dx * 256 )
 		+ (u64)(dy * 1024 * 1024)
 	;
 }

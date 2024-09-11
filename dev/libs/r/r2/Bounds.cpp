@@ -69,6 +69,26 @@ int BoundsI::bottom() const {
 	return down();
 }
 
+bool r2::BoundsI::testCircle(int px, int py, int r) {
+	int closestX = std::clamp(px, xMin, xMax);
+	int closestY = std::clamp(py, yMin, yMax);
+
+	int distX = px - closestX;
+	int distY = py - closestY;
+
+	double distSq = distX * distX + distY * distY;
+	return distSq < r* r;
+}
+
+BoundsI r2::BoundsI::fromCenterSize(int x, int y, int w, int h) {
+	BoundsI b;
+	b.xMin = std::lrint(x - w * 0.5);
+	b.yMin = std::lrint(y - w * 0.5);
+	b.xMax = std::lrint(x + w * 0.5);
+	b.yMax = std::lrint(y + h * 0.5);
+	return b;
+}
+
 std::string BoundsI::toString() {
 	std::string str;
 	str += "tl br(";
@@ -86,3 +106,15 @@ std::string BoundsI::toString() {
 	str += std::to_string(height());
 	return str;
 };
+
+void BoundsI::im() {
+	using namespace ImGui;
+	DragInt("min", &xMin);
+	DragInt("max", &xMax);
+}
+
+void r2::Bounds::im() {
+	using namespace ImGui;
+	DragDouble2("min", &xMin);
+	DragDouble2("max", &xMax);
+}

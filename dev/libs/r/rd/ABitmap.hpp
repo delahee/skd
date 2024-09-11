@@ -14,9 +14,9 @@
 namespace rd {
 	//Animated Bitmap
 	class ABitmap : public r2::Bitmap, public rd::IAnimated {
+		typedef r2::Bitmap Super;
 	public:
 		bool			destroyed = false;
-		
 		bool			usePivot = false;
 
 		float			pivotX = 0.0f;
@@ -35,19 +35,24 @@ namespace rd {
 		
 		virtual			~ABitmap();
 		
-		Node *			clone(Node * n);
+		virtual Node *	clone(Node * n = 0) override;
 		virtual void	dispose() override;
+		virtual void	reset() override;
 
 		void			play(const char* g, bool loop = false);
+		void			play(const Str& str) { play(str.c_str()); };
+
+		void			playAndLoop(const char* g);
+		void			playAndLoop(const Str & str) { playAndLoop(str.c_str()); };
 		void			playAndLoop(const std::string & str) { playAndLoop(str.c_str()); };
-		void			playAndLoop(const char * g);
 		void			replay(int nb = 1);
 		void			stop();
 
 		r2::Tile*		syncTile();
 
+		void			set(TileLib* lib = 0, const char* g = 0, int frame = 0, bool stopAllAnims = false);
 		void			set(TileLib * l, const std::string & str, int frame = 0, bool stopAllAnims = false);
-		void			set(rd::TileLib * lib = nullptr, const char * g = nullptr, int frame = 0, bool stopAllAnims= false);
+		void			set(TileLib* l, const Str& str, int frame = 0, bool stopAllAnims = false) { return set(l, str.c_str(), frame, stopAllAnims); };
 		
 		bool			isReady();
 		virtual void	update(double dt);
@@ -69,6 +74,7 @@ namespace rd {
 
 		static	rd::ABitmap* make(TileLib* l = nullptr, const char* str = nullptr, r2::Node* parent = nullptr);
 		static	rd::ABitmap* fromLib(TileLib* l = nullptr, const char* str = nullptr, r2::Node* parent = nullptr);
+		static	rd::ABitmap* fromLib(TileLib* l , const Str& _str, r2::Node* parent) { return rd::ABitmap::fromLib( l, _str.c_str(), parent); };
 		static	rd::ABitmap* fromPool(TileLib* l = nullptr, const char* str = nullptr, r2::Node* parent = nullptr);
 
 		virtual	NodeType		getType() const override { return NodeType::NT_ABMP; };
@@ -85,6 +91,7 @@ namespace rd {
 
 		void			setFlippedX(bool onOff);
 		void			setFlippedY(bool onOff);
+		ABitmap*		andDestroy();
 	protected:
 		bool			flippedX = false;
 		bool			flippedY = false;

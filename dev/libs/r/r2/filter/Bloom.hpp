@@ -1,13 +1,14 @@
 #pragma once
 
 #include "r/Types.hpp"
-#include "r2/filter/Layer.hpp"
+#include "r2/filter/Copy.hpp"
 #include "r2/Tile.hpp"
 #include "r2/svc/Bloom.hpp"
 
 namespace r2 {
 	namespace filter {
-		class Bloom : public r2::filter::Layer {
+		class Bloom : public r2::filter::Copy {
+			typedef r2::filter::Copy Super;
 		public:
 									Bloom();
 			explicit				Bloom(const BloomCtrl& ctrl);

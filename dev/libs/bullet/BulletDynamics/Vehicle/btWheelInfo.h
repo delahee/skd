@@ -8,6 +8,7 @@
  * of this software for any purpose.  
  * It is provided "as is" without express or implied warranty.
 */
+#pragma once
 #ifndef BT_WHEEL_INFO_H
 #define BT_WHEEL_INFO_H
 

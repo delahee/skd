@@ -1,18 +1,11 @@
-#include "Bitmap.hpp"
-#include "Bitmap.hpp"
 #include "stdafx.h"
+
 #include "Bitmap.hpp"
-#include "Sprite.hpp"
-#include "1-graphics/geo_vectors.h"
-#include "1-graphics/Graphic.h"
 
 using namespace std;
 using namespace r2;
 
-#define SUPER Sprite
-
-
-Bitmap::Bitmap(r2::Tile * t, Node * parent ) : SUPER(parent) {
+Bitmap::Bitmap(r2::Tile * t, Node * parent ) : Super(parent) {
 	if (t == nullptr) {
 		tile = rd::Pools::tiles.alloc();
 		ownsTile = true;
@@ -21,35 +14,25 @@ Bitmap::Bitmap(r2::Tile * t, Node * parent ) : SUPER(parent) {
 		tile = t;
 		ownsTile = false;
 	}
-#ifdef _DEBUG
-	name = string("Bitmap#") + to_string(uid);
-#endif
+	setName("Bitmap");
 }
 
-r2::Bitmap::Bitmap(Pasta::Texture * t, Node * parent) : SUPER(parent) {
+r2::Bitmap::Bitmap(Pasta::Texture * t, Node * parent) : Super(parent) {
 	tile = Tile::fromPool(t, 0, 0, t->getWidth(), t->getHeight());
 	ownsTile = true;
-#ifdef _DEBUG
-	name = string("Bitmap#") + to_string(uid);
-#endif
+	setName("Bitmap");
 }
 
-r2::Bitmap::Bitmap(Node * parent) : SUPER(parent) {
+r2::Bitmap::Bitmap(Node * parent) : Super(parent) {
 	tile = rd::Pools::tiles.alloc();
 	ownsTile = true;
-#ifdef _DEBUG
-	name = string("Bitmap#") + to_string(uid);
-#endif
+	setName("Bitmap");
 }
 
 Node * r2::Bitmap::clone(Node * n) {
 	if (!n) n = rd::Pools::bitmaps.alloc();
 	
-	SUPER::clone(n);
-
-#ifdef _DEBUG
-	name = string("Bitmap#") + to_string(uid);
-#endif
+	Super::clone(n);
 
 	Bitmap * s = dynamic_cast<Bitmap*>(n);
 	if (s) {//we may sometime want to transfer only parent!
@@ -69,7 +52,7 @@ void r2::Bitmap::releaseTile() {
 			tile->disposeTexture();
 
 		if ( tile->isPooled() ) {
-			rd::Pools::tiles.free(tile);
+			rd::Pools::tiles.release(tile);
 			tile = nullptr;
 		}
 		else {
@@ -84,7 +67,7 @@ void r2::Bitmap::releaseTile() {
 }
 
 void Bitmap::dispose(){
-	SUPER::dispose();
+	Super::dispose();
 
 	releaseTile();
 }
@@ -95,13 +78,12 @@ void r2::Bitmap::reset() {
 	//avoid touching tiles here please dispose will do it 
 }
 
-Bitmap * r2::Bitmap::fromImageFile(const std::string & path, r2::Node * parent, r2::TexFilter filter ){
+Bitmap * r2::Bitmap::fromImageFile(const char* path, r2::Node * parent, r2::TexFilter filter ){
 	auto tile = Tile::fromImageFile(path,filter);
 	auto bmp = new Bitmap(tile,parent);
 	bmp->ownsTile = true;
-#ifdef _DEBUG
-	bmp->name = path+"#"+to_string(rs::Sys::getUID());
-#endif
+	bmp->name = std::string(path)+"#"+to_string(rs::Sys::getUID());
+	bmp->vars.set("r2::bitmap::path", path);
 	return bmp;
 }
 
@@ -125,6 +107,9 @@ Bitmap* r2::Bitmap::fromBatchElem(r2::BatchElem * be) {
 	bmp->blendmode = be->blendmode;
 
 	if (be->batch) {
+		bmp->x += be->batch->x;
+		bmp->y += be->batch->y;
+		bmp->z += be->batch->z;
 		bmp->depthRead = be->batch->depthRead;
 		bmp->depthWrite = be->batch->depthWrite;
 		bmp->killAlpha = be->batch->killAlpha;
@@ -145,6 +130,7 @@ Bitmap* r2::Bitmap::fromBatchElem(r2::BatchElem * be) {
 
 Bitmap* r2::Bitmap::fromTexture(Pasta::Texture* tex, r2::Node* parent) {
 	auto bmp = rd::Pools::bitmaps.alloc();
+	bmp->setName("Textured Bitmap");
 	bmp->setTile(r2::Tile::fromTexture(tex), true);
 	if (parent) parent->addChild(bmp);
 	return bmp;
@@ -152,6 +138,7 @@ Bitmap* r2::Bitmap::fromTexture(Pasta::Texture* tex, r2::Node* parent) {
 
 Bitmap * r2::Bitmap::fromTile(r2::Tile * t, r2::Node * parent, bool own){
 	auto bmp = rd::Pools::bitmaps.alloc();
+	bmp->setName("Tiled Bitmap");
 	bmp->setTile(t, own);
 	if(parent) parent->addChild(bmp);
 	return bmp;
@@ -168,7 +155,9 @@ Bitmap* r2::Bitmap::fromColor32(r::u32 col, r2::Node* parent) {
 
 Bitmap* r2::Bitmap::fromColor(const r::Color& c, r2::Node* parent) {
 	auto bmp = fromTile(r2::GpuObjects::whiteTile->clone(), parent, true);
+	bmp->setName("Colored Bitmap");
 	bmp->color = c;
+	bmp->vars.set("rd::TileColor", c);
 	return bmp;
 }
 
@@ -213,8 +202,11 @@ r::Vector2 r2::Bitmap::getCenterRatio() {
 }
 
 void r2::Bitmap::setCenterRatio(double px, double py){
-	if (tile)
+	if (tile) {
 		tile->setCenterRatio(px, py);
+		vars.set("c_px", px);
+		vars.set("c_py", py);
+	}
 }
 
 void r2::Bitmap::setCenterRatioPixel(int x, int y){
@@ -262,4 +254,3 @@ Bitmap* r2::Bitmap::fromLib(rd::TileLib* t, const std::string& name, r2::Node* p
 	return fromLib(t, name.c_str(), parent);
 }
 
-#undef SUPER

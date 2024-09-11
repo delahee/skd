@@ -1,3 +1,4 @@
+#pragma once
 #ifndef BT_SDF_COLLISION_SHAPE_H
 #define BT_SDF_COLLISION_SHAPE_H
 

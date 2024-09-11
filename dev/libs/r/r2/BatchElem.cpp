@@ -27,23 +27,27 @@ r2::BatchElem::BatchElem(const BatchElem & src){
 	x = src.x;
 	y = src.y;
 	z = src.z;
+	useSimpleZ	= src.useSimpleZ;
+	zTopOffset	= src.zTopOffset;
+	zBottomOffset = src.zBottomOffset;
 
 	scaleX		= src.scaleX;
 	scaleY		= src.scaleY;
 	rotation	= src.rotation;
 
-	alpha = src.alpha;
-	color = src.color;
+	alpha		= src.alpha;
+	color		= src.color;
 
-	priority = src.priority;
-	visible = src.visible;
+	priority	= src.priority;
+	visible		= src.visible;
 
 	blendmode = src.blendmode;
-	setTile(src.tile->clone());
+	setTile(src.tile->clone(),true);
 	ownsTile = true;
 
 	//don't pass batch infos
 	batch = nullptr;
+	vars = src.vars;
 }
 
 BatchElem::~BatchElem() {
@@ -65,6 +69,7 @@ void BatchElem::remove() {
 }
 
 void BatchElem::dispose() {
+	vars.dispose();
 	remove();
 	setTile(nullptr);
 	destroyed = true;
@@ -72,6 +77,7 @@ void BatchElem::dispose() {
 }
 
 void r2::BatchElem::destroy(){
+	//traceObject("~r2::BatchElem", this);
 	dispose();
 	if(beFlags & NF_CUSTOM_POOLING ) {
 		//
@@ -80,7 +86,7 @@ void r2::BatchElem::destroy(){
 		//
 	}
 	else if (beFlags & NF_ORIGINATES_FROM_POOL) {
-		rd::Pools::free(this);
+		rd::Pools::release(this);
 	}
 	else {
 		delete this;
@@ -92,27 +98,19 @@ void r2::BatchElem::destroy(){
 void r2::BatchElem::pushQuad(eastl::vector<float>& vertices, eastl::vector<u32>& indices) {
 	Tile* tile = getTile();
 	Matrix44 local;
-	local.setScale(scaleX, scaleY, 1.0f);
-	if (rotation) local.rotateZ(PASTA_RAD2DEG(rotation));
+
 	local.translate(Pasta::Vector3(x, y, z));
+	if (rotation) local.rotateZ(PASTA_RAD2DEG(rotation));
+	local.scale(Vector3(scaleX, scaleY, 1.0f));
+
 
 	const float zTop = useSimpleZ ? 0.0f : zTopOffset;
 	const float zBottom = useSimpleZ ? 0.0f : zBottomOffset;
 
-	Vector3 topLeft(local * Vector3(tile->dx, tile->dy, zTop));
-	Vector3 topRight(local * Vector3(tile->dx + tile->width, tile->dy, zTop));
-	Vector3 bottomLeft(local * Vector3(tile->dx, tile->dy + tile->height, zBottom));
-	Vector3 bottomRight(local * Vector3(tile->dx + tile->width, tile->dy + tile->height, zBottom));
-
-	/*
-	if (BatchElemTest) {
-		float bend = 12;
-		float h = bottomLeft.y - topLeft.y;
-		float coef = h / 30.0f;
-		topLeft.x += bend * coef;
-		topRight.x += bend * coef;
-	}
-	*/
+	Vector3 topLeft{ local * Vector3(tile->dx, tile->dy, zTop) };
+	Vector3 topRight{ local * Vector3(tile->dx + tile->width, tile->dy, zTop) };
+	Vector3 bottomLeft{ local * Vector3(tile->dx, tile->dy + tile->height, zBottom) };
+	Vector3 bottomRight{ local * Vector3(tile->dx + tile->width, tile->dy + tile->height, zBottom) };
 
 	const float u1 = tile->u1;
 	const float v1 = tile->v1;
@@ -156,17 +154,17 @@ void r2::BatchElem::pushQuad(eastl::vector<float>& vertices, eastl::vector<u32>&
 void r2::BatchElem::pushQuadNormals(eastl::vector<float>& vertices, eastl::vector<u32>& indices) {
 	Tile* tile = getTile();
 	Matrix44 local;
-	local.setScale(scaleX, scaleY, 1.0f);
-	if (rotation) local.rotateZ(PASTA_RAD2DEG(rotation));
 	local.translate(Pasta::Vector3(x, y, z));
+	if(rotation) local.rotateZ(PASTA_RAD2DEG(rotation));
+	local.scale(Vector3(scaleX, scaleY, 1.0f));
 
 	const float zTop = useSimpleZ ? 0.0f : zTopOffset;
 	const float zBottom = useSimpleZ ? 0.0f : zBottomOffset;
 
-	Vector3 topLeft(local * Vector3(tile->dx, tile->dy, zTop));
-	Vector3 topRight(local * Vector3(tile->dx + tile->width, tile->dy, zTop));
-	Vector3 bottomLeft(local * Vector3(tile->dx, tile->dy + tile->height, zBottom));
-	Vector3 bottomRight(local * Vector3(tile->dx + tile->width, tile->dy + tile->height, zBottom));
+	Vector3 topLeft{ local * Vector3(tile->dx, tile->dy, zTop) };
+	Vector3 topRight{ local * Vector3(tile->dx + tile->width, tile->dy, zTop) };
+	Vector3 bottomLeft{ local * Vector3(tile->dx, tile->dy + tile->height, zBottom) };
+	Vector3 bottomRight{ local * Vector3(tile->dx + tile->width, tile->dy + tile->height, zBottom) };
 
 	const float u1 = tile->u1;
 	const float v1 = tile->v1;
@@ -254,6 +252,7 @@ void r2::BatchElem::reset() {
 
 void r2::BatchElem::clear() {
 	if (batch != nullptr) batch->remove(this);
+	name.clear();
 	x = 0.0;
 	y = 0.0;
 	z = 0.0;
@@ -271,9 +270,14 @@ void r2::BatchElem::clear() {
 	blendmode	= Pasta::TransparencyType::TT_INHERIT;
 
 	setTile(nullptr);
+	vars.dispose();
+	next = prev = 0;
+	beFlags = 0;
+	useSimpleZ = true;
 
 	//don't pass batch infos
 	batch		= nullptr;
+	vars.dispose();
 }
 
 double BatchElem::getValue(TVar valType) {
@@ -313,12 +317,12 @@ double BatchElem::setValue(TVar valType, double val) {
 		case VG:		color.g = val;				break;
 		case VB:		color.b = val;				break;
 		case VA:		color.a = val;				break;
-		case VAlpha:	alpha = val;				break;
+		case VAlpha:	alpha = val; if (alpha < 0) alpha = 0; break;
 	}
 	return val;
 }
 
-void r2::BatchElem::setTile(r2::Tile * t){
+void r2::BatchElem::setTile(r2::Tile * t, bool own){
 	if (tile && ownsTile) {
 		tile->destroy();
 		tile = nullptr;
@@ -326,7 +330,11 @@ void r2::BatchElem::setTile(r2::Tile * t){
 
 	//no own no touch get rid of this
 	tile = t;
-	ownsTile = false;
+	ownsTile = tile ? own : false;
+}
+
+void r2::BatchElem::setName(const char* _name) {
+	name = _name + std::to_string(uid);
 }
 
 // Override base tile pivot! (can cause problem with real frame)
@@ -354,13 +362,15 @@ r2::BatchElem* BatchElem::clone(r2::BatchElem * nu) const {
 
 	nu->blendmode = blendmode;
 
-	nu->setTile(tile->clone());
+	nu->setTile(tile->clone(),true);
 
 	nu->useSimpleZ = useSimpleZ;
 	nu->zTopOffset = zTopOffset;
 	nu->zBottomOffset = zBottomOffset;
+	nu->vars = vars;
 
 	nu->batch = nullptr;
+	nu->vars = vars;
 
 	return nu;
 }
@@ -371,9 +381,10 @@ void r2::BatchElem::getLocalBounds(Bounds & b) const {
 	if (!tile) return;
 
 	Matrix44 local;
-	local.setScale(scaleX, scaleY, 1.0f);
-	local.rotateZ(PASTA_RAD2DEG(rotation));
 	local.translate(Pasta::Vector3(x, y, 0.0f));
+	local.rotateZ(PASTA_RAD2DEG(rotation));
+	local.scale(Vector3(scaleX, scaleY, 1.0f));
+
 
 	Vector2 topLeft(local		* Vector2(tile->dx, tile->dy));
 	Vector2 topRight(local		* Vector2(tile->dx + tile->width, tile->dy));
@@ -470,4 +481,12 @@ BatchElem* BatchElem::fromPool(rd::TileLib* lib, const char* group, r2::Batch* b
 	if (batch) 
 		batch->add(a);
 	return a;
+}
+
+void BatchElem::blendAdd() {
+	blendmode = Pasta::TT_ADD;
+}
+
+void r2::BatchElem::blendAlpha(){
+	blendmode = Pasta::TT_ALPHA;
 }

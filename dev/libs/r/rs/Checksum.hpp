@@ -8,6 +8,7 @@ public:
 	static void			Initialize();	// automatically called the first time you ask for a checksum
 
 	// CRC32
+	static r::u32		CRC32(const char* _Buffer);
 	static r::u32		CRC32(const void* _Buffer, r::u32 _Size);
 
 	// Adler32 (faster, particularly with large buffers)

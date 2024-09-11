@@ -1,9 +1,5 @@
 #pragma once
 
-#include "1-graphics/geo_vectors.h"
-
-#include "r/Types.hpp"
-
 #include "r2/svc/Capture.hpp"
 #include "r2/Lib.hpp"
 

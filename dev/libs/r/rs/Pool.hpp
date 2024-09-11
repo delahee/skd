@@ -1,12 +1,5 @@
 #pragma once
 
-#include "EASTL/vector.h"
-#include <algorithm>
-#include <functional>
-#ifdef _DEBUG
-#include <iostream>
-#endif
-
 namespace rs {
 	
 	template< typename T >
@@ -29,7 +22,8 @@ namespace rs {
 
 		T* alloc();
 		void reserve( int nb );
-		void free(T* elem);
+		void release(T* elem);
+		void fastFree(T* elem);//faster but unsafe ( esp for tools or debug stuff )
 		void safeFree(T* elem);//slower but safe ( esp for tools or debug stuff )
 		void resetAll();
 		
@@ -42,14 +36,36 @@ namespace rs {
 			//Sources of crash 
 			//1- manual new but sent to pool or vice versa
 			//2- was free to the wrong pool by the generic free dispatcher
-			for (auto e : active) {
-				//am bored let's avoid these possibilities
-				auto pos = eastl::find(repo.begin(), repo.end(), e);
-				if (pos != repo.end())
-					repo.erase(pos);
 
-				(deallocator) ? deallocator(e) : delete e;//was already deleted?
+			bool tryDeallocateActives = false;
+			if (tryDeallocateActives) {
+				int idx = 0;
+				for (auto e : active) {
+					if (idx == 45) 
+						int here = 0;
+					{//because of course sometime we are stupid
+						//am bored let's avoid these possibilities
+						auto pos = eastl::find(repo.begin(), repo.end(), e);
+						while (pos != repo.end()) {
+							repo.erase(pos);
+							pos = eastl::find(repo.begin(), repo.end(), e);
+						}
+					}
 
+					{
+						auto pos = eastl::find(active.begin(), active.end(), e);
+						while (pos != active.end()) {//if we get here this may be bad
+							active.erase(pos);
+							pos = eastl::find(active.begin(), active.end(), e);
+						}
+					}
+
+					(deallocator) ? deallocator(e) : delete e;//was already deleted?
+
+					idx++;
+					if (idx >= active.size())
+						break;
+				}
 			}
 			active.clear();
 			int pos = 0;
@@ -66,11 +82,14 @@ namespace rs {
 		catch ( std::exception e) {
 			printf("[Pool] delete exception\n");
 		}
+		initialized = false;
 	}
 
 	template<typename T>
-	T* Pool<T>::alloc()
-	{
+	T* Pool<T>::alloc(){
+		if(!initialized)
+			return new T();
+
 		T * elem = nullptr;
 		if (repo.size() == 0)
 			elem = (allocator != nullptr) ? allocator() : new T();
@@ -95,10 +114,28 @@ namespace rs {
 		active.clear();
 	};
 
-	
-
 	template<typename T>
-	void Pool<T>::free(T* elem){
+	void Pool<T>::fastFree(T* elem) {
+		using namespace std;
+		if (elem == nullptr) return;
+
+		if (onFree) onFree(elem);
+		if (reset) reset(elem);
+
+#ifdef _DEBUG
+		auto alreadyPos = std::find(repo.begin(), repo.end(), elem);
+		if (alreadyPos != repo.end()) {
+			std::cout << "ERROR was already in repo!\n";
+			return;
+		}
+#endif
+
+		repo.push_back(elem);
+	};
+
+	
+	template<typename T>
+	void Pool<T>::release(T* elem){
 		using namespace std;
 		if (elem == nullptr) return;
 
@@ -108,8 +145,9 @@ namespace rs {
 		auto alreadyPos = std::find(repo.begin(), repo.end(), elem);
 		if (alreadyPos != repo.end()) {
 #ifdef _DEBUG
-			std::cout << "ERROR" << " was already in repo!" << std::endl;
+			std::cout << "ERROR was already in repo!\n";
 #endif
+			return;
 		}
 
 		repo.push_back(elem);
@@ -118,14 +156,13 @@ namespace rs {
 			active.erase(pos);
 		else {
 #ifdef _DEBUG
-			std::cout << "ERROR" << " was not in actives!" << std::endl;
+			std::cout << "ERROR was not in actives!\n";
 #endif
 		}
 	};
 
 	template<typename T>
 	void Pool<T>::safeFree(T* elem) {
-
 		if (elem == nullptr) return;
 
 		if (onFree) onFree(elem);
@@ -152,5 +189,8 @@ namespace rs {
 			repo.push_back((allocator != nullptr) ? allocator() : new T());
 	}
 
+#if 0
+	//to have at least one compiled pool at project start
 	static Pool<int> __intpool;
+#endif
 }

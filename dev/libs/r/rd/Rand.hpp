@@ -22,9 +22,11 @@ protected:
 	int		tinySh8		= 8;
 	int		uid			= 0;
 
-	int		seed = 0;
-
 public:
+#ifdef _DEBUG
+	int		seed = 0;
+#endif
+
 				Rand();
 				Rand(int seed);
 	void		init(int seed);
@@ -49,6 +51,18 @@ public:
 	inline Ty elem(const eastl::vector<Ty>& arr) {
 		if (!arr.size()) return {};
 		return arr[dice(0, arr.size() - 1)];
+	}; 
+	
+	template<typename Ty>
+	inline int idx(const eastl::vector<Ty>& arr) {
+		if (!arr.size()) return -1;
+		return dice(0, arr.size() - 1);
+	};
+
+	template<typename Ty>
+	inline int idx(const std::vector<Ty>& arr) {
+		if (!arr.size()) return -1;
+		return dice(0, arr.size() - 1);
 	};
 
 	// usage shuffle(arr.data(), 0, arr.size());
@@ -115,14 +129,14 @@ public:
 		return dice(std::rint(val * (1 - maxPc)),std::rint(val * (1 + maxPc)));
 	};
 
-	inline DIRECTION randDir4() {
+	inline rd::Dir randDir4() {
 		int r = dice(0, 3);
 		switch (r)
 		{
-		case 0: return DIRECTION::LEFT;
-		case 1: return DIRECTION::RIGHT;
-		case 2: return DIRECTION::UP;
-		default: return DIRECTION::DOWN;
+		case 0: return Dir::LEFT;
+		case 1: return Dir::RIGHT;
+		case 2: return Dir::UP;
+		default: return Dir::DOWN;
 		}
 	};
 
@@ -142,6 +156,10 @@ public:
 		return diceF(0.f,360.f);
 	};
 
+	inline bool pc(int pc) {
+		return dice(0, 100) <= pc;
+	};
+
 	inline bool pc(float pc) {
 		return diceF(0.f, 100.f) <= pc;
 	};
@@ -156,6 +174,7 @@ public:
 		return (random(2) & 1) ? 1 : -1;
 	};
 
+	Vector2 circle(float _radius = 1.0f);
 
 	inline Vector3 randSphere(float _radius) {
 		for (int i = 0; i < 8; ++i) {
@@ -173,7 +192,10 @@ public:
 		}
 		return Vector3(0, 0, 1 * _radius);
 	};
+	
 
+	void			im(const char*prefix=0);
+	std::string		toString();
 	static Rand&	get();
 
 protected:
